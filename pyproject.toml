@@ -7,6 +7,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+eval = ["openai>=1.0", "modal>=0.64"]
 
 [build-system]
 requires = ["hatchling"]
