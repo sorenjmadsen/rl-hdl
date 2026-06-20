@@ -55,18 +55,27 @@ catches a malformed reference before it can poison training.
 ## Baseline eval (Modal)
 
 The zero-shot `pass@1` on the held-out split is the floor's headline number and
-the demo's red/green source of truth. Grading runs in parallel Modal containers
-(one Verilator build, fanned out with `.map`); inference runs locally against
-Fireworks.
+the demo's red/green source of truth. Both grading **and** inference run in Modal
+containers — grading fans out with `.map` (one cached Verilator build), and
+Fireworks sampling reads the key from a Modal Secret — so `modal run` works from
+any Python env without local deps.
+
+One-time setup of the Fireworks secret:
+
+```bash
+modal secret create fireworks-api FIREWORKS_API_KEY=...
+```
 
 ```bash
 # End-to-end check of the Modal grader — no API key, goldens should hit pass@1 = 1.0
 modal run modal_app.py::main --selftest --split heldout
 
-# Zero-shot baseline (needs FIREWORKS_API_KEY)
-export FIREWORKS_API_KEY=...            # and optionally RLHDL_MODEL=accounts/.../<model>
-modal run modal_app.py::main --split heldout --n 5
-modal run modal_app.py::main --split train  --n 1
+# Zero-shot baseline. RLHDL_MODEL picks the Fireworks model / deployment id.
+RLHDL_MODEL=accounts/<acct>/deployments/<id> modal run modal_app.py::main --split heldout --n 5
+modal run modal_app.py::main --split train --n 1
+
+# List Fireworks models the account can reach
+modal run modal_app.py::models --substr coder
 
 # Grading throughput (grades/sec through the parallel grader)
 modal run modal_app.py::bench --total 256
