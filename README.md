@@ -52,6 +52,43 @@ just reseed the random vectors.
 Every task's golden reference is smoke-tested to self-grade to `1.0`, which
 catches a malformed reference before it can poison training.
 
+## Baseline eval (Modal)
+
+The zero-shot `pass@1` on the held-out split is the floor's headline number and
+the demo's red/green source of truth. Both grading **and** inference run in Modal
+containers — grading fans out with `.map` (one cached Verilator build), and
+Fireworks sampling reads the key from a Modal Secret — so `modal run` works from
+any Python env without local deps.
+
+One-time setup of the Fireworks secret:
+
+```bash
+modal secret create fireworks-api FIREWORKS_API_KEY=...
+```
+
+```bash
+# End-to-end check of the Modal grader — no API key, goldens should hit pass@1 = 1.0
+modal run modal_app.py::main --selftest --split heldout
+
+# Zero-shot baseline. RLHDL_MODEL picks the Fireworks model / deployment id.
+RLHDL_MODEL=accounts/<acct>/deployments/<id> modal run modal_app.py::main --split heldout --n 5
+modal run modal_app.py::main --split train --n 1
+
+# List Fireworks models the account can reach
+modal run modal_app.py::models --substr coder
+
+# Grading throughput (grades/sec through the parallel grader)
+modal run modal_app.py::bench --total 256
+```
+
+(`::main` is required because the app has multiple entrypoints — Modal won't
+auto-pick one.)
+
+Output is a per-task table (`pass`, `mean_reward`), an aggregate `pass@1`, and a
+`baseline.json`. `mean_reward` is the dense signal — watch it move before
+`pass@1` does. The same `evaluate()` runs in-process via `rl_hdl.eval` for quick
+local iteration without Modal.
+
 ## Layout
 
 ```
@@ -60,8 +97,13 @@ rl_hdl/
   extract.py    # robust Verilog module extraction from LLM output
   verifier.py   # grade() — Verilator-grounded dense reward
   tasks.py      # TRAIN_TASKS + HELDOUT_TASKS (+ golden references)
+  prompt.py     # Task -> chat messages for the policy model
+  inference.py  # Fireworks (OpenAI-compatible) sampling
+  eval.py       # pass@1 / mean-reward aggregation (grader-agnostic)
+modal_app.py    # Modal image (Verilator) + parallel grader + baseline entrypoint
 tests/
   test_verifier.py
+  test_eval.py
 docs/
   BRIEF.md      # full project brief
 ```

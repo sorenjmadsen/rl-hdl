@@ -9,3 +9,6 @@ __pycache__/
 obj_dir/
 *.vcd
 rlhdl_*/
+
+# generated eval output
+baseline.json

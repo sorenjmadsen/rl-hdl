@@ -128,6 +128,9 @@ def grade(completion: str, task: Task, *, keep_dir: bool = False, timeout: float
                 _verilator(), "--binary", "--timing", "-Wno-fatal",
                 "--top-module", "tb", "-o", "sim",
                 "--Mdir", str(workdir / "obj"),
+                # Grading is compile-bound, not sim-bound (tiny vector counts), so
+                # skip host-compiler and Verilator optimization to speed turnaround.
+                "-O0", "-CFLAGS", "-O0",
                 "tb.sv", "candidate.sv", "reference.sv",
             ],
             cwd=workdir, capture_output=True, text=True, timeout=timeout,
