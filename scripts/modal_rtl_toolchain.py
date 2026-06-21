@@ -77,6 +77,16 @@ RTL_TOOLCHAIN_IMAGE = (
         "tabulate==0.9.0",
         "tomli==2.0.2",
     )
+    # Open standard-cell library for real-area (um^2) synthesis. The grader reads
+    # RLHDL_LIBERTY; real area is observe-only (reward still ranks on cell count),
+    # so a fetch failure cannot affect grading. Swap URL+path for Sky130 if wanted.
+    .run_commands(
+        "mkdir -p /opt/pdk && curl -fsSL "
+        "https://raw.githubusercontent.com/The-OpenROAD-Project/OpenROAD-flow-scripts/"
+        "master/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib "
+        "-o /opt/pdk/NangateOpenCellLibrary_typical.lib"
+    )
+    .env({"RLHDL_LIBERTY": "/opt/pdk/NangateOpenCellLibrary_typical.lib"})
 )
 
 

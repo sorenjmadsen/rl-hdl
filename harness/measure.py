@@ -44,11 +44,18 @@ class Arm:
     reward: float
     equivalent: bool
     rtl: str
+    # Observe-only real area (um^2), populated when a liberty lib is configured.
+    area_um2: float | None = None
 
     def improvement_over(self, baseline_cells: int | None) -> float | None:
         if not baseline_cells or self.cells is None:
             return None
         return (baseline_cells - self.cells) / baseline_cells
+
+    def area_um2_improvement_over(self, baseline_area_um2: float | None) -> float | None:
+        if not baseline_area_um2 or self.area_um2 is None:
+            return None
+        return (baseline_area_um2 - self.area_um2) / baseline_area_um2
 
 
 @dataclass
@@ -57,6 +64,7 @@ class GapResult:
     baseline_cells: int | None
     zero_shot: Arm
     loop: Arm
+    baseline_area_um2: float | None = None
 
     @property
     def gap_cells(self) -> int | None:
@@ -76,6 +84,11 @@ def _cells(info: dict) -> int | None:
     return c if c is not None else info.get("ref_cells")
 
 
+def _area_um2(info: dict) -> float | None:
+    a = info.get("cand_area_um2")
+    return a if a is not None else info.get("ref_area_um2")
+
+
 def measure_gap(
     task: Task,
     *,
@@ -93,39 +106,49 @@ def measure_gap(
 
     base = grade(task.reference_rtl, task)
     baseline_cells = _cells(base.info)
+    baseline_area_um2 = _area_um2(base.info)
 
     # Zero-shot: one greedy structural-rewrite attempt.
     zs = optimize(task, model_fn=model_fn, grader=grade,
                   config=zero_shot_config or ZERO_SHOT_CONFIG)
     zero_shot = Arm("zero-shot", _cells(zs.best.info), zs.best.reward,
-                    zs.best.equivalent, zs.best.rtl)
+                    zs.best.equivalent, zs.best.rtl, area_um2=_area_um2(zs.best.info))
 
     # Full loop: the flywheel to plateau. Re-grade the winner once for its final
     # reward/equivalence (the flywheel tracks cells, not the full GradeResult).
     fly = run_flywheel(task, model_fn=model_fn, grader=grade, config=loop_config)
     best = grade(fly.best_rtl, task)
     loop = Arm("full-loop", fly.best_cells, best.reward,
-               best.info.get("equivalent", False), fly.best_rtl)
+               best.info.get("equivalent", False), fly.best_rtl,
+               area_um2=_area_um2(best.info))
 
-    return GapResult(task.task_id, baseline_cells, zero_shot, loop)
+    return GapResult(task.task_id, baseline_cells, zero_shot, loop,
+                     baseline_area_um2=baseline_area_um2)
 
 
 def format_gap(res: GapResult) -> str:
     """A compact three-row table for the demo."""
-    def row(name: str, arm_cells: int | None, imp: float | None, equiv) -> str:
+    def row(name: str, arm_cells: int | None, imp: float | None, equiv,
+            area: float | None, area_imp: float | None) -> str:
         cells = "n/a" if arm_cells is None else str(arm_cells)
         win = "" if imp is None else f"{imp * 100:+.1f}%"
-        return f"{name:<12} {cells:>7} {win:>9} {str(equiv):>6}"
+        um2 = "" if area is None else f"{area:.0f}"
+        um2_win = "" if area_imp is None else f"{area_imp * 100:+.1f}%"
+        return f"{name:<12} {cells:>7} {win:>9} {str(equiv):>6} {um2:>9} {um2_win:>9}"
 
+    b_um2 = res.baseline_area_um2
     lines = [
         f"\noptimization gap on {res.task_id}",
-        f"{'arm':<12} {'cells':>7} {'vs base':>9} {'equiv':>6}",
-        "-" * 38,
-        row("baseline", res.baseline_cells, 0.0 if res.baseline_cells else None, True),
+        f"{'arm':<12} {'cells':>7} {'vs base':>9} {'equiv':>6} {'um²':>9} {'um² base':>9}",
+        "-" * 58,
+        row("baseline", res.baseline_cells, 0.0 if res.baseline_cells else None, True,
+            b_um2, 0.0 if b_um2 else None),
         row("zero-shot", res.zero_shot.cells,
-            res.zero_shot.improvement_over(res.baseline_cells), res.zero_shot.equivalent),
+            res.zero_shot.improvement_over(res.baseline_cells), res.zero_shot.equivalent,
+            res.zero_shot.area_um2, res.zero_shot.area_um2_improvement_over(b_um2)),
         row("full-loop", res.loop.cells,
-            res.loop.improvement_over(res.baseline_cells), res.loop.equivalent),
+            res.loop.improvement_over(res.baseline_cells), res.loop.equivalent,
+            res.loop.area_um2, res.loop.area_um2_improvement_over(b_um2)),
     ]
     gap = res.gap_cells
     verdict = ("n/a" if gap is None

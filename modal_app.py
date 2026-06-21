@@ -19,6 +19,16 @@ import modal
 
 VERILATOR_TAG = "v5.038"
 
+# Open standard-cell library for real-area (um^2) measurement. Single self-contained
+# .lib; swappable to Sky130 by changing the URL + path (the grader only reads the
+# RLHDL_LIBERTY env var). Real area is OBSERVE-ONLY today — the reward still ranks on
+# technology-independent cell count — so a fetch failure cannot affect grading.
+LIBERTY_URL = (
+    "https://raw.githubusercontent.com/The-OpenROAD-Project/OpenROAD-flow-scripts/"
+    "master/flow/platforms/nangate45/lib/NangateOpenCellLibrary_typical.lib"
+)
+LIBERTY_PATH = "/opt/pdk/NangateOpenCellLibrary_typical.lib"
+
 # Silicon toolchain (Verilator + Yosys), no local source yet so we can branch it.
 _toolchain = (
     modal.Image.debian_slim(python_version="3.11")
@@ -28,13 +38,17 @@ _toolchain = (
         # Yosys for the PPA (gate-count) stage; only runs behind a passing
         # equivalence check. Equivalence itself uses the Verilator built below.
         "yosys",
+        # curl + certs to fetch the liberty library below.
+        "curl", "ca-certificates",
     )
     .run_commands(
         f"git clone --depth 1 --branch {VERILATOR_TAG} "
         "https://github.com/verilator/verilator.git /tmp/verilator",
         "cd /tmp/verilator && autoconf && ./configure && "
         "make -j$(nproc) && make install && rm -rf /tmp/verilator",
+        f"mkdir -p /opt/pdk && curl -fsSL {LIBERTY_URL} -o {LIBERTY_PATH}",
     )
+    .env({"RLHDL_LIBERTY": LIBERTY_PATH})
 )
 
 grader_image = _toolchain.add_local_python_source("cologic")
@@ -57,6 +71,24 @@ inference_image = (
 )
 
 app = modal.App("rl-hdl")
+
+# grade().info keys surfaced into the JSON dumps + demo tables. Cell count drives
+# the reward today; the real-area (um^2) keys ride alongside as observe-only. When
+# we flip the reward to real area, this stays the single list to read from.
+_SURFACED_INFO_KEYS = (
+    "stage", "equivalent", "ref_cells", "cand_cells", "area_improvement",
+    "ref_area_um2", "cand_area_um2", "area_um2_improvement",
+)
+
+
+def _pct(x) -> str:
+    """Signed percentage for an improvement fraction, blank if unmeasured."""
+    return "" if x is None else f"{x * 100:+.1f}%"
+
+
+def _area(x) -> str:
+    """Compact um^2 area, blank if no liberty library was configured."""
+    return "" if x is None else f"{x:.0f}"
 
 
 @app.function(image=grader_image, timeout=180)
@@ -123,16 +155,14 @@ def optimize_remote(task, model: str, n_candidates: int, temperature: float,
         n_candidates=n_candidates, temperature=temperature, max_repair_rounds=max_repair_rounds,
     ))
     pool = [
-        {"origin": c.origin, "reward": round(c.reward, 4), "stage": c.info.get("stage"),
-         "equivalent": c.info.get("equivalent"), "ref_cells": c.info.get("ref_cells"),
-         "cand_cells": c.info.get("cand_cells"), "area_improvement": c.info.get("area_improvement")}
+        {"origin": c.origin, "reward": round(c.reward, 4),
+         **{k: c.info.get(k) for k in _SURFACED_INFO_KEYS}}
         for c in res.pool
     ]
     return {
         "task_id": task.task_id,
         "best": {"origin": res.best.origin, "reward": round(res.best.reward, 4),
-                 "info": {k: res.best.info.get(k) for k in
-                          ("stage", "equivalent", "ref_cells", "cand_cells", "area_improvement")},
+                 "info": {k: res.best.info.get(k) for k in _SURFACED_INFO_KEYS},
                  "rtl": res.best.rtl},
         "baseline_reward": round(res.baseline_reward, 4),
         "n_equivalent": res.n_equivalent,
@@ -177,9 +207,13 @@ def flywheel_remote(task, model: str, n_candidates: int, temperature: float,
         "baseline_cells": res.baseline_cells,
         "best_cells": res.best_cells,
         "total_improvement": res.total_improvement,
+        "baseline_area_um2": res.baseline_area_um2,
+        "best_area_um2": res.best_area_um2,
+        "total_area_um2_improvement": res.total_area_um2_improvement,
         "plateaued": res.plateaued,
         "history": [{"gen": g.gen, "cells": g.cells, "reward": round(g.reward, 4),
-                     "equivalent": g.equivalent, "improved": g.improved} for g in res.history],
+                     "equivalent": g.equivalent, "improved": g.improved,
+                     "area_um2": g.area_um2} for g in res.history],
         "best_rtl": res.best_rtl,
     }
 
@@ -222,11 +256,12 @@ def measure_remote(task, model: str, n_candidates: int, temperature: float,
 
     def arm(a) -> dict:
         return {"name": a.name, "cells": a.cells, "reward": round(a.reward, 4),
-                "equivalent": a.equivalent, "rtl": a.rtl}
+                "equivalent": a.equivalent, "rtl": a.rtl, "area_um2": a.area_um2}
 
     return {
         "task_id": res.task_id,
         "baseline_cells": res.baseline_cells,
+        "baseline_area_um2": res.baseline_area_um2,
         "zero_shot": arm(res.zero_shot),
         "loop": arm(res.loop),
         "gap_cells": res.gap_cells,
@@ -381,15 +416,17 @@ def floor():
     results = list(grade_opt_remote.map([c for _, c in cands], [mul8] * len(cands)))
 
     print(f"\nfloor design: {mul8.task_id} ({mul8.top_module})\n")
-    print(f"{'candidate':<14} {'reward':>7}  {'stage':<18} {'equiv':>5} {'ref':>5} {'cand':>5} {'win':>7}")
-    print("-" * 70)
+    print(f"{'candidate':<14} {'reward':>7}  {'stage':<18} {'equiv':>5} {'ref':>5} {'cand':>5} "
+          f"{'win':>7} {'um²':>8} {'um²win':>7}")
+    print("-" * 86)
     for (name, _), r in zip(cands, results):
         i = r["info"]
-        win = "" if i["area_improvement"] is None else f"{i['area_improvement'] * 100:+.1f}%"
+        win = _pct(i.get("area_improvement"))
         ref = "" if i["ref_cells"] is None else i["ref_cells"]
         cand = "" if i["cand_cells"] is None else i["cand_cells"]
         print(f"{name:<14} {r['reward']:>7.3f}  {i['stage']:<18} {str(i['equivalent']):>5} "
-              f"{str(ref):>5} {str(cand):>5} {win:>7}")
+              f"{str(ref):>5} {str(cand):>5} {win:>7} "
+              f"{_area(i.get('cand_area_um2')):>8} {_pct(i.get('area_um2_improvement')):>7}")
     print()
 
 
@@ -417,19 +454,22 @@ def harness_run(
 
     r = optimize_remote.remote(task, model, n, temperature, repair)
 
-    print(f"{'candidate':<34} {'reward':>7}  {'stage':<18} {'equiv':>5} {'ref':>5} {'cand':>5} {'win':>7}")
-    print("-" * 92)
+    print(f"{'candidate':<34} {'reward':>7}  {'stage':<18} {'equiv':>5} {'ref':>5} {'cand':>5} "
+          f"{'win':>7} {'um²':>8} {'um²win':>7}")
+    print("-" * 108)
     for c in r["pool"]:
-        win = "" if c["area_improvement"] is None else f"{c['area_improvement'] * 100:+.1f}%"
+        win = _pct(c.get("area_improvement"))
         ref = "" if c["ref_cells"] is None else c["ref_cells"]
         cand = "" if c["cand_cells"] is None else c["cand_cells"]
         print(f"{c['origin']:<34} {c['reward']:>7.3f}  {str(c['stage']):<18} "
-              f"{str(c['equivalent']):>5} {str(ref):>5} {str(cand):>5} {win:>7}")
+              f"{str(c['equivalent']):>5} {str(ref):>5} {str(cand):>5} {win:>7} "
+              f"{_area(c.get('cand_area_um2')):>8} {_pct(c.get('area_um2_improvement')):>7}")
 
     b = r["best"]
     print(f"\nbest: {b['origin']}  reward={b['reward']}  "
           f"equivalent={b['info'].get('equivalent')}  "
-          f"area_improvement={b['info'].get('area_improvement')}")
+          f"area_improvement={b['info'].get('area_improvement')}  "
+          f"area_um2_improvement={b['info'].get('area_um2_improvement')}")
     print(f"baseline_reward={r['baseline_reward']}  n_equivalent={r['n_equivalent']}/"
           f"{len(r['pool'])}  improved={r['improved']}")
     if r["improved"]:
@@ -460,17 +500,20 @@ def flywheel_run(
 
     r = flywheel_remote.remote(task, model, n, temperature, repair, gens, patience)
 
-    print(f"{'gen':>3} {'cells':>6} {'reward':>7} {'equiv':>6} {'improved':>9}")
-    print("-" * 38)
+    print(f"{'gen':>3} {'cells':>6} {'um²':>8} {'reward':>7} {'equiv':>6} {'improved':>9}")
+    print("-" * 48)
     for h in r["history"]:
         cells = "" if h["cells"] is None else h["cells"]
-        print(f"{h['gen']:>3} {str(cells):>6} {h['reward']:>7.3f} "
+        print(f"{h['gen']:>3} {str(cells):>6} {_area(h.get('area_um2')):>8} {h['reward']:>7.3f} "
               f"{str(h['equivalent']):>6} {str(h['improved']):>9}")
 
     imp = r["total_improvement"]
     imp_s = "n/a" if imp is None else f"{imp * 100:+.1f}%"
-    print(f"\nbaseline={r['baseline_cells']} cells -> best={r['best_cells']} cells "
-          f"({imp_s})  plateaued={r['plateaued']}")
+    um2_imp = r.get("total_area_um2_improvement")
+    um2_s = "n/a" if um2_imp is None else f"{um2_imp * 100:+.1f}%"
+    print(f"\nbaseline={r['baseline_cells']} cells -> best={r['best_cells']} cells ({imp_s})"
+          f"  |  area {_area(r.get('baseline_area_um2'))} -> {_area(r.get('best_area_um2'))} um² ({um2_s})"
+          f"  plateaued={r['plateaued']}")
     print("\n--- best RTL ---\n" + r["best_rtl"] + "\n")
 
 

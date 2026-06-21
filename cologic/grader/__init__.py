@@ -24,10 +24,23 @@ an equivalent design scores exactly EQUIV_BASE and info["stage"] is
 from __future__ import annotations
 
 from cologic.grader.equivalence import check_equivalence
-from cologic.grader.ppa import YosysUnavailable, synth_cells
+from cologic.grader.ppa import (
+    YosysUnavailable,
+    liberty_path,
+    synth_area_um2,
+    synth_cells,
+)
 from cologic.schema import GradeResult, Task
 
-__all__ = ["grade", "GradeResult", "Task", "check_equivalence", "synth_cells"]
+__all__ = [
+    "grade",
+    "GradeResult",
+    "Task",
+    "check_equivalence",
+    "synth_cells",
+    "synth_area_um2",
+    "liberty_path",
+]
 
 NO_MODULE_REWARD = 0.00
 COMPILE_ERROR_REWARD = 0.05
@@ -54,7 +67,15 @@ def grade(candidate_rtl: str, task: Task, *, timeout: float = 60.0) -> GradeResu
       ref_cells       : int|None  (golden reference gate count)
       cand_cells      : int|None  (candidate gate count)
       area_improvement: float|None  (fraction smaller than reference; <0 = bigger)
+      ref_area_um2    : float|None  (golden reference real area, liberty-mapped)
+      cand_area_um2   : float|None  (candidate real area, liberty-mapped)
+      area_um2_improvement : float|None  (fraction smaller by real area)
       log             : str    (tool output, truncated)
+
+    The *_um2 keys are OBSERVE-ONLY: they are populated when a liberty library is
+    configured (RLHDL_LIBERTY, shipped in the Modal image) but do NOT affect the
+    reward — the climb still ranks on technology-independent cell count. They let
+    us watch real silicon area before promoting it into the reward.
     """
     eq = check_equivalence(candidate_rtl, task, timeout=timeout)
 
@@ -67,6 +88,9 @@ def grade(candidate_rtl: str, task: Task, *, timeout: float = 60.0) -> GradeResu
         "ref_cells": None,
         "cand_cells": None,
         "area_improvement": None,
+        "ref_area_um2": None,
+        "cand_area_um2": None,
+        "area_um2_improvement": None,
         "log": eq.log,
     }
 
@@ -96,4 +120,25 @@ def grade(candidate_rtl: str, task: Task, *, timeout: float = 60.0) -> GradeResu
         area_improvement=round(improvement, 6),
         log=(eq.log + "\n--- yosys(cand) ---\n" + cand.log)[-4000:],
     )
+
+    # Observe-only: real silicon area (um^2) when a liberty library is configured.
+    # This NEVER changes the reward (still computed from cell count above); it just
+    # records the real-area metric so we can validate it before promoting it.
+    lib = liberty_path()
+    if lib:
+        try:
+            ref_area = synth_area_um2(task.reference_rtl, task.top_module, liberty=lib, timeout=timeout)
+            cand_area = synth_area_um2(eq.candidate, task.top_module, liberty=lib, timeout=timeout)
+            um2_improvement = (
+                (ref_area.area_um2 - cand_area.area_um2) / ref_area.area_um2
+                if ref_area.area_um2 else 0.0
+            )
+            base_info.update(
+                ref_area_um2=round(ref_area.area_um2, 6),
+                cand_area_um2=round(cand_area.area_um2, 6),
+                area_um2_improvement=round(um2_improvement, 6),
+            )
+        except (YosysUnavailable, RuntimeError):
+            pass  # observation only — a liberty/tool hiccup must never affect reward
+
     return GradeResult(round(reward, 6), base_info)

@@ -31,8 +31,12 @@ agent's output.
 ## Sim metrics
 
 - **Correctness** — test vectors vs. a golden model (hard gate).
+- **Area** — gate count drives the reward today; **real µm²** rides alongside as observe-only
+  (liberty-mapped synthesis). See [`real_area_um2.md`](real_area_um2.md) for the integration,
+  how to verify it on Modal, and how to flip the reward to µm².
 - **Power** — estimated from synthesized logic, **relative** (not absolute mW yet — see
-  "Power metric" below).
+  "Power metric" below). Dynamic power is intentionally out of scope until per-design
+  representative stimulus exists (random equivalence vectors are not a power workload).
 - **Clock / timing** — relative timing/slack from synthesis.
 
 ## Reward design (staged, verifiable)

@@ -11,7 +11,12 @@ import pytest
 
 from cologic.designs import MUL8_BASELINE, MUL8_BROKEN, MUL8_GOOD, mul8
 from cologic.grader import EQUIV_BASE, EQUIV_FLOOR, NOT_EQUIVALENT_REWARD, grade
-from cologic.grader.ppa import _cell_count_from_stat, yosys_available
+from cologic.grader.ppa import (
+    _cell_count_from_stat,
+    _chip_area_from_stat,
+    liberty_path,
+    yosys_available,
+)
 
 
 def test_golden_is_equivalent_to_itself():
@@ -77,3 +82,48 @@ def test_good_rewrite_gets_ppa_score_when_yosys_is_present():
     expected = max(EQUIV_FLOOR, min(1.0, expected))
     assert r.reward == pytest.approx(round(expected, 6))
     assert r.reward >= EQUIV_FLOOR
+
+
+def test_chip_area_parser_accepts_module_and_top_module_forms():
+    module = "   Chip area for module '\\mul8': 1234.567800\n"
+    top = "Chip area for top module '\\tt_um_tpu': 98765.4321\n"
+    assert _chip_area_from_stat(module) == pytest.approx(1234.5678)
+    assert _chip_area_from_stat(top) == pytest.approx(98765.4321)
+    assert _chip_area_from_stat("no area reported here") is None
+
+
+def test_liberty_path_resolves_only_existing_files(tmp_path, monkeypatch):
+    monkeypatch.delenv("RLHDL_LIBERTY", raising=False)
+    assert liberty_path() is None
+    monkeypatch.setenv("RLHDL_LIBERTY", str(tmp_path / "missing.lib"))
+    assert liberty_path() is None
+    lib = tmp_path / "cells.lib"
+    lib.write_text("/* liberty stub */")
+    monkeypatch.setenv("RLHDL_LIBERTY", str(lib))
+    assert liberty_path() == str(lib)
+
+
+def test_area_um2_keys_are_present_and_none_without_liberty(monkeypatch):
+    """The *_um2 info keys are part of the stable contract and stay None (reward
+    untouched) when no liberty library is configured."""
+    monkeypatch.delenv("RLHDL_LIBERTY", raising=False)
+    r = grade(MUL8_GOOD, mul8)
+    assert r.info["equivalent"] is True
+    for key in ("ref_area_um2", "cand_area_um2", "area_um2_improvement"):
+        assert key in r.info and r.info[key] is None
+    assert r.reward >= EQUIV_BASE  # real-area observation never lowers the reward
+
+
+@pytest.mark.skipif(
+    not (yosys_available() and liberty_path()),
+    reason="real-area metric needs yosys + RLHDL_LIBERTY (runs in the Modal image)",
+)
+def test_real_area_um2_is_measured_when_liberty_is_present():
+    """With a liberty lib, equivalent designs get real um^2 area — observe-only,
+    so the reward must still equal the cell-count climb."""
+    r = grade(MUL8_GOOD, mul8)
+    assert r.info["stage"] == "graded"
+    assert r.info["ref_area_um2"] is not None and r.info["cand_area_um2"] is not None
+    assert r.info["area_um2_improvement"] is not None
+    expected = max(EQUIV_FLOOR, min(1.0, EQUIV_BASE + 0.5 * r.info["area_improvement"]))
+    assert r.reward == pytest.approx(round(expected, 6))

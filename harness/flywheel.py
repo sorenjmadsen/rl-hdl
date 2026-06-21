@@ -46,6 +46,9 @@ class Generation:
     cells: int | None
     equivalent: bool
     improved: bool  # did this generation beat the previous best?
+    # Observe-only real area (um^2) of the best-so-far when a liberty lib is set.
+    # The improvement decision still rides on `cells`; this just rides along.
+    area_um2: float | None = None
 
 
 @dataclass
@@ -56,6 +59,9 @@ class FlywheelResult:
     baseline_cells: int | None
     history: list[Generation] = field(default_factory=list)
     plateaued: bool = False
+    # Observe-only real-area (um^2) endpoints, populated when a liberty lib is set.
+    baseline_area_um2: float | None = None
+    best_area_um2: float | None = None
 
     @property
     def total_improvement(self) -> float | None:
@@ -63,11 +69,23 @@ class FlywheelResult:
             return None
         return (self.baseline_cells - self.best_cells) / self.baseline_cells
 
+    @property
+    def total_area_um2_improvement(self) -> float | None:
+        if not self.baseline_area_um2 or self.best_area_um2 is None:
+            return None
+        return (self.baseline_area_um2 - self.best_area_um2) / self.baseline_area_um2
+
 
 def _cells(info: dict) -> int | None:
     """Candidate gate count from a grade info dict (falls back to ref for the baseline)."""
     c = info.get("cand_cells")
     return c if c is not None else info.get("ref_cells")
+
+
+def _area_um2(info: dict) -> float | None:
+    """Candidate real area from a grade info dict (falls back to ref for the baseline)."""
+    a = info.get("cand_area_um2")
+    return a if a is not None else info.get("ref_area_um2")
 
 
 def run_flywheel(
@@ -90,9 +108,12 @@ def run_flywheel(
     best_cells = _cells(base.info)
     best_reward = base.reward
     baseline_cells = best_cells
+    best_area_um2 = _area_um2(base.info)
+    baseline_area_um2 = best_area_um2
 
     history = [Generation(0, best_rtl, best_reward, best_cells,
-                          bool(base.info.get("equivalent", True)), False)]
+                          bool(base.info.get("equivalent", True)), False,
+                          area_um2=best_area_um2)]
     stale = 0
 
     for g in range(1, cfg.max_generations + 1):
@@ -110,10 +131,15 @@ def run_flywheel(
         )
         if improved:
             best_rtl, best_cells, best_reward, stale = cand.rtl, cells, cand.reward, 0
+            # Track the adopted design's real area alongside (observe-only).
+            cand_area = cand.info.get("cand_area_um2")
+            if cand_area is not None:
+                best_area_um2 = cand_area
         else:
             stale += 1
 
-        history.append(Generation(g, best_rtl, best_reward, best_cells, cand.equivalent, improved))
+        history.append(Generation(g, best_rtl, best_reward, best_cells, cand.equivalent,
+                                  improved, area_um2=best_area_um2))
         if stale >= cfg.patience:
             break
 
@@ -124,6 +150,8 @@ def run_flywheel(
         baseline_cells=baseline_cells,
         history=history,
         plateaued=stale >= cfg.patience,
+        baseline_area_um2=baseline_area_um2,
+        best_area_um2=best_area_um2,
     )
 
 
