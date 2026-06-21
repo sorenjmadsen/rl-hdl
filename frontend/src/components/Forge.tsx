@@ -172,10 +172,10 @@ export function Forge() {
                 </g>
               ))}
             </svg>
-            {/* the three big minions standing on the platform */}
-            <div className="absolute left-[20%] top-[34%]"><PixelMinion role="PLAN" size={56} working={running} /></div>
-            <div className="absolute left-[44%] top-[24%]"><PixelMinion role="FORGE" size={68} working={running} /></div>
-            <div className="absolute left-[66%] top-[40%]"><PixelMinion role="PROVE" size={56} working={running} /></div>
+            {/* the three big minions standing on the platform — the active one hops */}
+            <div className="absolute left-[20%] top-[34%]"><PixelMinion role="PLAN" size={56} working={running} active={active.role === "PLAN"} /></div>
+            <div className="absolute left-[44%] top-[24%]"><PixelMinion role="FORGE" size={68} working={running} active={active.role === "FORGE"} /></div>
+            <div className="absolute left-[66%] top-[40%]"><PixelMinion role="PROVE" size={56} working={running} active={active.role === "PROVE"} /></div>
           </div>
 
           {/* agent status, synced to the active edit */}

@@ -18,10 +18,12 @@ export function PixelMinion({
   role,
   size = 48,
   working = false,
+  active = false,
 }: {
   role: Role;
   size?: number;
   working?: boolean;
+  active?: boolean;
 }) {
   const s = SKIN[role];
   const px = size / 16; // 16x16 logical grid
@@ -31,7 +33,7 @@ export function PixelMinion({
   return (
     <div
       style={{ width: size, height: size * 1.15 }}
-      className={working ? "minion-bob-fast" : "minion-bob"}
+      className={active ? "minion-active" : working ? "minion-bob-fast" : "minion-bob"}
     >
       <svg width={size} height={size * 1.15} viewBox={`0 0 ${size} ${size * 1.15}`} shapeRendering="crispEdges">
         {/* shadow */}
