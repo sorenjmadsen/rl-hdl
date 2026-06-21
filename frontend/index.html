@@ -108,28 +108,36 @@
           <div style="color:var(--accent);letter-spacing:.16em;font-weight:600;font-size:12px">// TESTBENCH STIMULUS</div>
           <button onClick="{{ toggleStimHelp }}" style="background:none;border:none;color:var(--muted);font-size:10px;letter-spacing:.1em;padding:0" style-hover="color:var(--accent)">{{ stimHelpLabel }}</button>
         </div>
-        <div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.6">Combinational designs: leave blank (auto vectors). Clocked designs (<span style="color:var(--text)">clk</span> port): supply a scaffold&#8209;fill <span style="color:var(--text)">task stimulus</span>.</div>
-        <textarea value="{{ stimulus }}" onInput="{{ onStimulus }}" rows="5" spellcheck="false" placeholder="task stimulus; ... endtask  (clocked designs only)" style="width:100%;background:var(--inset);border:1px solid var(--line);padding:10px;color:var(--accent);outline:none;line-height:1.55;tab-size:2" style-focus="border-color:var(--accent-dim)"></textarea>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.6">Combinational designs: leave blank (auto vectors). Clocked designs (<span style="color:var(--text)">clk</span> port): upload a scaffold&#8209;fill <span style="color:var(--text)">task stimulus</span> or a full VerilogEval <span style="color:var(--text)">_test.sv</span>.</div>
+        <div ref="{{ stimDropRef }}" onClick="{{ openStimDialog }}" onDragOver="{{ onStimDragOver }}" onDragLeave="{{ onStimDragLeave }}" onDrop="{{ onStimDrop }}" style="border:1px dashed {{ stimDropBorder }};background:{{ stimDropBg }};padding:18px 16px;text-align:center;cursor:pointer;transition:border-color .12s,background .12s">
+          <div style="font-size:18px;color:var(--accent-dim);margin-bottom:6px;letter-spacing:.1em">[ + ]</div>
+          <div style="color:var(--text);font-size:12px">drop a <span style="color:var(--accent)">stimulus</span> file here</div>
+          <div style="color:var(--muted);font-size:10px;margin-top:4px">.v / .sv / .txt &nbsp;·&nbsp; click to browse &nbsp;·&nbsp; combinational? skip this</div>
+        </div>
+        <input ref="{{ stimInputRef }}" type="file" accept=".v,.sv,.txt" onChange="{{ onStimPick }}" style="display:none" />
+        <sc-if value="{{ hasStim }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:9px;display:flex;align-items:center;gap:9px;padding:6px 10px;background:var(--bg-2);border:1px solid var(--line)">
+            <span style="color:var(--accent-dim)">&#9636;</span>
+            <span style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ stimName }}</span>
+            <span style="color:var(--muted);font-size:10px">{{ stimSize }}</span>
+            <button onClick="{{ removeStim }}" style="background:none;border:none;color:var(--muted);padding:0 2px;font-size:14px;line-height:1" style-hover="color:var(--red)">&times;</button>
+          </div>
+        </sc-if>
         <sc-if value="{{ stimHelpOpen }}" hint-placeholder-val="{{ false }}">
           <div style="margin-top:9px;border:1px solid var(--line);background:var(--bg-2)">
             <div style="padding:6px 10px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.14em;color:var(--muted);display:flex;justify-content:space-between">
-              <span>SCAFFOLD&#8209;FILL CONTRACT</span><button onClick="{{ useExample }}" style="background:none;border:none;color:var(--accent);font-size:10px;letter-spacing:.1em;padding:0" style-hover="color:var(--accent-bright)">USE EXAMPLE &#8594;</button>
+              <span>SCAFFOLD&#8209;FILL CONTRACT</span><button onClick="{{ downloadExample }}" style="background:none;border:none;color:var(--accent);font-size:10px;letter-spacing:.1em;padding:0" style-hover="color:var(--accent-bright)">DOWNLOAD EXAMPLE &#8595;</button>
             </div>
             <div style="padding:9px 11px;font-size:10px;color:var(--muted);line-height:1.7">
               &#8226; define <span style="color:var(--text)">task stimulus;</span> — the entry point<br>
               &#8226; drive input ports by name<br>
               &#8226; advance time with <span style="color:var(--text)">@(posedge clk);</span> — never drive the clock<br>
-              &#8226; call <span style="color:var(--text)">rlhdl_sample;</span> when outputs should match
+              &#8226; call <span style="color:var(--text)">rlhdl_sample;</span> when outputs should match<br>
+              &#8226; <span style="color:var(--text)">or</span> upload a full VerilogEval <span style="color:var(--text)">_test.sv</span> — used as&#8209;is
             </div>
             <pre style="margin:0;padding:11px;border-top:1px solid var(--line);background:var(--inset);color:var(--accent);font-size:11px;line-height:1.6;overflow-x:auto">{{ exampleStim }}</pre>
           </div>
         </sc-if>
-      </div>
-
-      <!-- prompt -->
-      <div>
-        <div style="color:var(--accent);letter-spacing:.16em;font-weight:600;font-size:12px;margin-bottom:10px">// OPTIMIZATION GOAL</div>
-        <textarea value="{{ prompt }}" onInput="{{ onPrompt }}" rows="3" spellcheck="false" placeholder="Optimize this 2&#215;2 matmul for gate count while preserving behavior." style="width:100%;background:var(--inset);border:1px solid var(--line);padding:10px;color:var(--text);outline:none;line-height:1.55" style-focus="border-color:var(--accent-dim)"></textarea>
       </div>
 
       <!-- mode -->
@@ -150,11 +158,15 @@
       <!-- advanced -->
       <div>
         <button onClick="{{ toggleAdvanced }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;padding:0;color:var(--accent);letter-spacing:.16em;font-weight:600;font-size:12px" style-hover="color:var(--accent-bright)">
-          <span>// PARAMETERS</span>
+          <span>// CUSTOM CONFIG</span>
           <span style="color:var(--muted);font-size:11px">{{ advChevron }}</span>
         </button>
         <sc-if value="{{ advancedOpen }}" hint-placeholder-val="{{ false }}">
-          <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:11px 14px">
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:4px">
+            <span style="font-size:10px;color:var(--muted);letter-spacing:.06em">optimization goal (spec)</span>
+            <textarea value="{{ prompt }}" onInput="{{ onPrompt }}" rows="3" spellcheck="false" placeholder="Optimize this 2&#215;2 matmul for gate count while preserving behavior." style="width:100%;background:var(--inset);border:1px solid var(--line);padding:10px;color:var(--text);outline:none;line-height:1.55" style-focus="border-color:var(--accent-dim)"></textarea>
+          </div>
+          <div style="margin-top:11px;display:grid;grid-template-columns:1fr 1fr;gap:11px 14px">
             <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">{{ genLabel }}</span><input type="number" min="1" value="{{ adv.max_generations }}" onInput="{{ onMaxGen }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
             <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">candidates / gen (n_candidates)</span><input type="number" min="1" value="{{ adv.n_candidates }}" onInput="{{ onNCand }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
             <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">temperature</span><input type="number" min="0" max="2" step="0.1" value="{{ adv.temperature }}" onInput="{{ onTemp }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
@@ -383,12 +395,14 @@ class Component extends DCLogic {
       baseUrl: 'https://yc-hack27--rl-hdl-web.modal.run',
       fileMeta: [],
       prompt: '',
-      stimulus: '',
+      stimulus: '',          // text content of the uploaded stimulus file (sent as `stimulus`)
+      stimName: '',          // uploaded stimulus filename (chip label)
+      stimSize: '',
       topOverride: '',
       mode: 'sia',
       adv: { max_generations:2, n_candidates:4, temperature:0.9, max_repair_rounds:1, patience:3, meta_model:'sonnet', meta_max_turns:60, max_tokens:4096, n_vectors:256 },
       stimHelpOpen: false,
-      advancedOpen: true,
+      advancedOpen: false,
       evolveOpen: false,
       phase: 'idle',          // idle | submitting | running | done | error
       jobId: '',
@@ -407,6 +421,8 @@ class Component extends DCLogic {
     this.scanRef = React.createRef();
     this.dropRef = React.createRef();
     this.fileInputRef = React.createRef();
+    this.stimDropRef = React.createRef();
+    this.stimInputRef = React.createRef();
     this.chartHostRef = React.createRef();
     this._timers = [];
   }
@@ -462,14 +478,36 @@ class Component extends DCLogic {
   // ---------- inputs ----------
   onToken(e){ const v=e.target.value; this.setState({token:v}); try{localStorage.setItem('rlhdl_token',v);}catch(_){} }
   onPrompt(e){ this.setState({prompt:e.target.value}); }
-  onStimulus(e){ this.setState({stimulus:e.target.value}); }
   onTopOverride(e){ this.setState({topOverride:e.target.value}); }
   setSia(){ this.setState({mode:'sia'}); }
   setHarness(){ this.setState({mode:'harness'}); }
   toggleStimHelp(){ this.setState(s=>({stimHelpOpen:!s.stimHelpOpen})); }
   toggleAdvanced(){ this.setState(s=>({advancedOpen:!s.advancedOpen})); }
   toggleEvolve(){ this.setState(s=>({evolveOpen:!s.evolveOpen})); }
-  useExample(){ this.setState({stimulus:this.exampleStim()}); }
+
+  // ---------- stimulus file ----------
+  openStimDialog(){ if(this.stimInputRef.current) this.stimInputRef.current.click(); }
+  setStimFile(file){
+    if(!file) return;
+    if(!/\.(v|sv|txt)$/i.test(file.name)){
+      this.setState({phase:'error',errorCode:'BAD FILE',errorDetail:'Stimulus must be a .v / .sv / .txt file.'}); return;
+    }
+    const r = new FileReader();
+    r.onload = () => this.setState({ stimulus:String(r.result||''), stimName:file.name, stimSize:this.fmtSize(file.size) });
+    r.readAsText(file);
+  }
+  onStimPick(e){ this.setStimFile(e.target.files && e.target.files[0]); e.target.value=''; }
+  onStimDragOver(e){ e.preventDefault(); if(this.stimDropRef.current){ this.stimDropRef.current.dataset.drag='1'; this.forceUpdate(); } }
+  onStimDragLeave(e){ e.preventDefault(); if(this.stimDropRef.current){ this.stimDropRef.current.dataset.drag=''; this.forceUpdate(); } }
+  onStimDrop(e){ e.preventDefault(); if(this.stimDropRef.current) this.stimDropRef.current.dataset.drag=''; this.setStimFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]); }
+  removeStim(){ this.setState({ stimulus:'', stimName:'', stimSize:'' }); }
+  downloadExample(){
+    const blob = new Blob([this.exampleStim()+'\n'], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download='stimulus_example.sv';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 0);
+  }
   setAdv(k,v){ this.setState(s=>({adv:Object.assign({},s.adv,{[k]:v})})); }
   onMaxGen(e){ this.setAdv('max_generations', parseInt(e.target.value)||1); }
   onNCand(e){ this.setAdv('n_candidates', parseInt(e.target.value)||1); }
@@ -635,6 +673,7 @@ class Component extends DCLogic {
     this.setState({
       demo:true, phase:'submitting',
       fileMeta:[{name:'tt_um_tpu.v', size:'1.8 K'}],
+      stimName:'tt_um_tpu_stim.v', stimSize:'0.9 K',
       prompt:'Optimize this 2x2 signed matrix-multiply accelerator for gate count while preserving its exact cycle-accurate I/O behaviour (it loads matrices A and B and outputs a selected element of A*B).',
       mode:'sia', elapsed:0, result:null, norm:null, parse:null, jobId:''
     });
@@ -858,10 +897,16 @@ endmodule
       dropBg: (this.dropRef.current && this.dropRef.current.dataset.drag) ? 'rgba(55,217,138,.06)' : 'var(--inset)',
 
       // testbench
-      stimulus:s.stimulus, onStimulus:(e)=>this.onStimulus(e),
+      stimName:s.stimName, stimSize:s.stimSize, hasStim: !!s.stimName,
+      stimInputRef:this.stimInputRef, stimDropRef:this.stimDropRef,
+      openStimDialog:()=>this.openStimDialog(), onStimPick:(e)=>this.onStimPick(e),
+      onStimDragOver:(e)=>this.onStimDragOver(e), onStimDragLeave:(e)=>this.onStimDragLeave(e), onStimDrop:(e)=>this.onStimDrop(e),
+      stimDropBorder: (this.stimDropRef.current && this.stimDropRef.current.dataset.drag) ? 'var(--accent)' : 'var(--line-2)',
+      stimDropBg: (this.stimDropRef.current && this.stimDropRef.current.dataset.drag) ? 'rgba(55,217,138,.06)' : 'var(--inset)',
+      removeStim:()=>this.removeStim(),
       stimHelpOpen:s.stimHelpOpen, toggleStimHelp:()=>this.toggleStimHelp(),
       stimHelpLabel: s.stimHelpOpen ? '× hide help' : '? help & example',
-      exampleStim:this.exampleStim(), useExample:()=>this.useExample(),
+      exampleStim:this.exampleStim(), downloadExample:()=>this.downloadExample(),
 
       // prompt
       prompt:s.prompt, onPrompt:(e)=>this.onPrompt(e),
