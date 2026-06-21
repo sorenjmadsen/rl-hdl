@@ -127,3 +127,10 @@ uv venv
 uv pip install -e ".[dev]"
 uv run pytest -q
 ```
+
+For a quick local proof that the converted TPU gradients give dense,
+Verilator-grounded rewards:
+
+```bash
+uv run python scripts/demo_verified_tasks.py
+```
