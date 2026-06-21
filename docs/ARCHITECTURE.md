@@ -72,24 +72,30 @@ show it beats frontier on the task set.
 
 ## Map to this repo
 
-`cologic/reward.py` already implements **stages 1–2** of the reward (compile gate + PASS
-gate) plus the power/timing **proxies**. This is the single-rollout reward function that the
-Modal harness and the Fireworks loop will call per rollout — everything else wraps around it.
+`cologic/verifier.py` `grade(completion, task)` implements the **syntax** and **functional**
+stages: it extracts the candidate module, builds a Verilator testbench that drives random
+vectors into both the candidate and the golden reference, and returns a dense reward in
+`[0,1]`. `cologic/tasks.py` holds the task library, `cologic/inference.py` the policy
+sampling, `cologic/eval.py` the pass@1 aggregation, and `modal_app.py` fans grading out
+across Modal sandboxes. This `grade()` is the single-rollout reward the Fireworks loop calls;
+the `agents/` loop and the `web/` visualizer wrap around it. (See ADR-001 in the top-level
+README — the earlier iverilog/VCD engine was removed; Verilator is canonical.)
 
-## Power metric — proxy now, real later
+## Power metric — not built yet
 
-Today the harness reports `toggles` — VCD value-changes, a **switching-activity proxy** for
-dynamic power. It is **not milliwatts**. The direction is honest (lower = better), and the
-deployed UI is labeled `rel. power · lower better` to match. `cologic/reward.py` keeps the
-field name `toggles`, which is already accurate.
+`grade()` today scores **correctness only**. There is **no power or timing signal** in the
+backend — the old VCD toggle proxy was dropped with the iverilog engine (ADR-001). The
+deployed UI label `rel. power · lower better` is therefore **illustrative**: a placeholder
+for a metric the backend does not yet produce. Treat any power number in the demo as fake
+until the estimator below lands.
 
 **Real estimator (planned, `cologic/power.py`):**
 
 - `yosys` synthesize RTL → map to **sky130** standard cells (`sky130_fd_sc_hd`).
 - Pull per-cell switching energy + leakage from the liberty `.lib`.
-- `P ≈ Σ(α · E_switch · f) + Σ leakage`, where activity `α` comes from the gate-level toggle
-  counts already parsed by `cologic/vcd.py`.
-- Wire the result into `evaluate()` as `power_mw`; keep `toggles` as the no-synth fallback.
+- `P ≈ Σ(α · E_switch · f) + Σ leakage`, where activity `α` comes from gate-level toggle
+  counts (re-add a VCD/SAIF reader, or get activity from Verilator's `--trace`).
+- Add `power_mw` to the `info` dict `grade()` already returns.
 - The same toolchain (`yosys` / OpenSTA) also yields real **timing** (clock/slack) — the
   second sim metric.
 
@@ -97,11 +103,13 @@ New deps: `yosys` (brew) + the sky130 PDK liberty (open source).
 
 ## Backend roadmap
 
-1. `cologic/power.py` — yosys + sky130 mW + timing. Makes the headline metric real.
-2. Encode the `ho_*` task set as DUT + golden-testbench pairs under `tasks/` (random-vector
-   TBs in the `examples/systolic_array/` style).
-3. `cologic/modal_eval.py` — run `evaluate()` across N Modal sandboxes in parallel, cached
-   image; returns per-task pass/reward (feeds the benchmark figure with real numbers).
+1. `cologic/power.py` — yosys + sky130 mW + timing. Makes the headline metric real (today
+   it's illustrative).
+2. Expand the task library in `cologic/tasks.py` (the `ho_*` set above) as more
+   DUT + golden-reference pairs.
+3. Scale grading on Modal — `modal_app.py` already fans `grade()` across sandboxes; wire its
+   per-task pass/reward into the benchmark figure to replace illustrative numbers.
 4. Fireworks RLVR loop — serve Gemma, feed `reward` as the training signal; log pass@1 per
-   epoch to replace illustrative benchmark data.
+   epoch. This is the missing flywheel: the loop in `agents/` improves a design at inference
+   time; training closes it.
 5. (Optional) thin HUD wrapper as the task API.
