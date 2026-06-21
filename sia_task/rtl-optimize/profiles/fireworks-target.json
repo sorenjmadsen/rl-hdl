@@ -1,7 +1,7 @@
 {
   "profile_id": "fireworks-target",
   "name": "Cologic policy on Fireworks",
-  "model": "accounts/sorenmadsen/deployments/tpwhh4w8",
+  "model": "accounts/fireworks/models/kimi-k2p7-code",
   "provider_id": "fireworks",
   "agent_reference": "default"
 }

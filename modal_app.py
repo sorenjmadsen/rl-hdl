@@ -345,7 +345,7 @@ def floor():
 @app.local_entrypoint()
 def harness_run(
     design: str = "mul8",
-    model: str = "accounts/sorenmadsen/deployments/tpwhh4w8",
+    model: str = "accounts/fireworks/models/kimi-k2p7-code",
     n: int = 6,
     temperature: float = 0.9,
     repair: int = 2,
@@ -389,7 +389,7 @@ def harness_run(
 @app.local_entrypoint()
 def flywheel_run(
     design: str = "mul8",
-    model: str = "accounts/sorenmadsen/deployments/tpwhh4w8",
+    model: str = "accounts/fireworks/models/kimi-k2p7-code",
     n: int = 6,
     temperature: float = 0.9,
     repair: int = 2,
