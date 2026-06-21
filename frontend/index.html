@@ -161,6 +161,9 @@
           <span>// CUSTOM CONFIG</span>
           <span style="color:var(--muted);font-size:11px">{{ advChevron }}</span>
         </button>
+        <sc-if value="{{ advancedClosed }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:8px;font-size:10px;color:var(--muted);line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="color:var(--faint)">goal:</span> {{ promptSummary }}</div>
+        </sc-if>
         <sc-if value="{{ advancedOpen }}" hint-placeholder-val="{{ false }}">
           <div style="margin-top:12px;display:flex;flex-direction:column;gap:4px">
             <span style="font-size:10px;color:var(--muted);letter-spacing:.06em">optimization goal (spec)</span>
@@ -922,8 +925,9 @@ endmodule
       isHarness: har, isSia: sia,
 
       // advanced
-      advancedOpen:s.advancedOpen, toggleAdvanced:()=>this.toggleAdvanced(),
+      advancedOpen:s.advancedOpen, advancedClosed:!s.advancedOpen, toggleAdvanced:()=>this.toggleAdvanced(),
       advChevron: s.advancedOpen?'[ − ]':'[ + ]',
+      promptSummary: (s.prompt.trim() || this.defaultGoal()),
       adv:s.adv, topOverride:s.topOverride,
       onMaxGen:(e)=>this.onMaxGen(e), onNCand:(e)=>this.onNCand(e), onTemp:(e)=>this.onTemp(e),
       onRepair:(e)=>this.onRepair(e), onPatience:(e)=>this.onPatience(e), onMetaModel:(e)=>this.onMetaModel(e),
