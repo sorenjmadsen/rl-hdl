@@ -71,15 +71,89 @@ modal run modal_app.py::probe \
   --models-csv 'accounts/fireworks/models/qwen2p5-coder-7b-instruct,accounts/fireworks/models/qwen3-0p6b'
 ```
 
-Run a before/after eval once both the base and RFT output model are callable:
+## Deployment
+
+Fireworks LoRA fine-tunes are not serverless-callable. Deploy the completed RFT
+model to an on-demand deployment before using it through the inference API. The
+Modal helper uses the existing `fireworks-api` Modal secret, so no local
+`firectl` login or local Fireworks API key is needed.
+
+List existing deployments:
 
 ```sh
-RLHDL_MODEL=accounts/fireworks/models/qwen3-0p6b \
+modal run scripts/modal_fireworks_deploy.py::list_deployments \
+  --account sorenmadsen
+```
+
+List compatible deployment shapes for a model:
+
+```sh
+modal run scripts/modal_fireworks_deploy.py::list_shapes \
+  --account sorenmadsen \
+  --model accounts/sorenmadsen/models/cologic-qwen3-rtl-rft-0621b
+```
+
+If shape discovery is permission-denied, use the default H100 path below. It has
+been validated against this account and remains bounded by one max replica and
+zero minimum replicas.
+
+Validate deployment parameters without creating a deployment:
+
+```sh
+modal run scripts/modal_fireworks_deploy.py::create \
+  --account sorenmadsen \
+  --model accounts/sorenmadsen/models/cologic-qwen3-rtl-rft-0621b \
+  --deployment-id cologic-qwen3-rft \
+  --accelerator-type NVIDIA_H100_80GB \
+  --accelerator-count 1 \
+  --min-replica-count 0 \
+  --max-replica-count 1 \
+  --validate-only
+```
+
+Create the bounded RFT deployment:
+
+```sh
+modal run scripts/modal_fireworks_deploy.py::create \
+  --account sorenmadsen \
+  --model accounts/sorenmadsen/models/cologic-qwen3-rtl-rft-0621b \
+  --deployment-id cologic-qwen3-rft \
+  --accelerator-type NVIDIA_H100_80GB \
+  --accelerator-count 1 \
+  --min-replica-count 0 \
+  --max-replica-count 1
+```
+
+For a fair before/after eval, also create a bounded deployment for the base:
+
+```sh
+modal run scripts/modal_fireworks_deploy.py::create \
+  --account sorenmadsen \
+  --model accounts/fireworks/models/qwen3-0p6b \
+  --deployment-id qwen3-0p6b-base \
+  --accelerator-type NVIDIA_H100_80GB \
+  --accelerator-count 1 \
+  --min-replica-count 0 \
+  --max-replica-count 1
+```
+
+Probe deployment inference. The probe retries 503/scale-from-zero responses:
+
+```sh
+modal run scripts/modal_fireworks_deploy.py::probe \
+  --account sorenmadsen \
+  --target cologic-qwen3-rft
+```
+
+Run a before/after eval once the deployments probe successfully:
+
+```sh
+RLHDL_MODEL=accounts/sorenmadsen/deployments/qwen3-0p6b-base \
 modal run modal_app.py::main --split heldout --n 1 \
   --out data/rft_eval_base_heldout.json \
   --dump data/rft_eval_base_heldout.jsonl
 
-RLHDL_MODEL=accounts/sorenmadsen/models/cologic-qwen3-rtl-rft \
+RLHDL_MODEL=accounts/sorenmadsen/deployments/cologic-qwen3-rft \
 modal run modal_app.py::main --split heldout --n 1 \
   --out data/rft_eval_rft_heldout.json \
   --dump data/rft_eval_rft_heldout.jsonl
