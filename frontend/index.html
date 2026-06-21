@@ -266,6 +266,18 @@
             </div>
             <div style="font-size:10px;color:var(--muted);margin-top:3px">Yosys cells</div>
           </div>
+          <sc-if value="{{ hasUm2 }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;min-width:200px;border:1px solid var(--line-2);background:var(--bg-1);padding:14px">
+              <div style="font-size:10px;color:var(--muted);letter-spacing:.14em">SILICON AREA</div>
+              <div style="margin-top:4px;display:flex;align-items:baseline;gap:8px">
+                <span style="font-size:20px;font-weight:700;color:var(--muted)">{{ um2Baseline }}</span>
+                <span style="color:var(--faint)">&#8594;</span>
+                <span style="font-size:26px;font-weight:700;color:var(--accent-bright)">{{ um2Best }}</span>
+                <span style="font-size:14px;font-weight:600;color:var(--accent);margin-left:2px">{{ um2Pct }}</span>
+              </div>
+              <div style="font-size:10px;color:var(--muted);margin-top:3px">µm² · Nangate45 · observe-only</div>
+            </div>
+          </sc-if>
           <sc-if value="{{ hasReward }}" hint-placeholder-val="{{ false }}">
             <div style="flex:1;min-width:160px;border:1px solid var(--line-2);background:var(--bg-1);padding:14px">
               <div style="font-size:10px;color:var(--muted);letter-spacing:.14em">BEST AREA &#916;</div>
@@ -285,6 +297,7 @@
                   <th style="padding:8px 13px;font-weight:500">GEN</th>
                   <th style="padding:8px 13px;font-weight:500">MEAN REWARD</th>
                   <th style="padding:8px 13px;font-weight:500">CELLS</th>
+                  <th style="padding:8px 13px;font-weight:500">µm&#178;</th>
                   <th style="padding:8px 13px;font-weight:500">EQUIVALENT</th>
                   <th style="padding:8px 13px;font-weight:500">AREA &#916;</th>
                 </tr></thead>
@@ -294,6 +307,7 @@
                       <td style="padding:9px 13px;color:{{ g.gColor }};font-weight:600">{{ g.gen }}{{ g.bestTag }}</td>
                       <td style="padding:9px 13px;color:var(--text)">{{ g.reward }}</td>
                       <td style="padding:9px 13px;color:var(--text)">{{ g.cellsTxt }}</td>
+                      <td style="padding:9px 13px;color:var(--muted)">{{ g.um2Txt }}</td>
                       <td style="padding:9px 13px;color:{{ g.equivColor }}">{{ g.equiv }}</td>
                       <td style="padding:9px 13px;color:var(--accent)">{{ g.area }}</td>
                     </tr>
@@ -586,6 +600,9 @@ class Component extends DCLogic {
       baseline: bestDesign ? bestDesign.ref_cells : (parse.baseline_cells),
       best: bestDesign ? bestDesign.cand_cells : null,
       improvement: bestDesign ? bestDesign.area_improvement : null,
+      baselineUm2: bestDesign ? bestDesign.ref_area_um2 : null,
+      bestUm2: bestDesign ? bestDesign.cand_area_um2 : null,
+      improvementUm2: bestDesign ? bestDesign.area_um2_improvement : null,
       equivalent: bestDesign ? !!bestDesign.equivalent : false,
       diff
     };
@@ -790,6 +807,7 @@ endmodule
           rowBg: isBest ? 'rgba(55,217,138,.07)' : 'transparent',
           reward: this.fmtNum(r.mean_reward,2),
           cellsTxt: (d.cand_cells!=null ? (d.ref_cells+' → '+d.cand_cells) : '—'),
+          um2Txt: (d.cand_area_um2!=null ? (Math.round(d.ref_area_um2)+' → '+Math.round(d.cand_area_um2)) : '—'),
           equiv: (r.n_equivalent!=null ? (r.n_equivalent+'/'+r.n_total) : '—'),
           equivColor: (r.n_equivalent===r.n_total && r.n_total>0) ? 'var(--accent)' : 'var(--red)',
           area: this.pct(r.mean_area_improvement)
@@ -900,6 +918,10 @@ endmodule
       cellsBaseline, cellsBest, cellsPct,
       hasReward: !!(norm && norm.kind==='sia'),
       bestAreaDelta: norm && norm.improvement!=null ? '−'+(norm.improvement*100).toFixed(1)+'%' : '—',
+      hasUm2: !!(norm && norm.bestUm2!=null),
+      um2Baseline: norm && norm.baselineUm2!=null ? String(Math.round(norm.baselineUm2)) : '—',
+      um2Best: norm && norm.bestUm2!=null ? String(Math.round(norm.bestUm2)) : '—',
+      um2Pct: norm && norm.improvementUm2!=null ? '−'+(norm.improvementUm2*100).toFixed(1)+'%' : '',
       bestGenLabel: norm && norm.bestGen ? norm.bestGen : '',
 
       isSiaResult: !!(norm && norm.kind==='sia'),
