@@ -394,7 +394,8 @@ class Component extends DCLogic {
       token: savedTok,
       baseUrl: 'https://yc-hack27--rl-hdl-web.modal.run',
       fileMeta: [],
-      prompt: '',
+      // Default goal so a launch works even with Custom Config collapsed (empty goal is rejected).
+      prompt: this.defaultGoal(),
       stimulus: '',          // text content of the uploaded stimulus file (sent as `stimulus`)
       stimName: '',          // uploaded stimulus filename (chip label)
       stimSize: '',
@@ -519,6 +520,8 @@ class Component extends DCLogic {
   onMaxTokens(e){ this.setAdv('max_tokens', parseInt(e.target.value)||256); }
   onNVectors(e){ this.setAdv('n_vectors', parseInt(e.target.value)||1); }
 
+  defaultGoal(){ return "Reduce logic gate count and total footprint area while preserving the design's exact behavior."; }
+
   exampleStim(){
     return 'task stimulus;\n  integer i;\n  begin\n    rst_n = 0; x = 0; @(posedge clk); #1;\n    rst_n = 1;\n    for (i = 0; i < 16; i = i + 1) begin\n      x = i[7:0]; @(posedge clk); #1; rlhdl_sample;\n    end\n  end\nendtask';
   }
@@ -533,15 +536,16 @@ class Component extends DCLogic {
   async onLaunch(){
     if(this.state.demo) return;
     if(this.fileObjs.length===0){ this.setState({phase:'error',errorCode:'NO FILES',errorDetail:'Add at least one .v / .sv design file before launching.'}); return; }
-    if(!this.state.prompt.trim()){ this.setState({phase:'error',errorCode:'NO PROMPT',errorDetail:'Describe the optimization goal — it becomes the spec shown to the model.'}); return; }
     if(!this.state.token.trim()){ this.setState({phase:'error',errorCode:'401',errorDetail:'Missing X-RLHDL-Token. Paste your token in the header field.'}); return; }
 
     this.clearTimers();
     this.setState({ phase:'submitting', elapsed:0, result:null, norm:null, parse:null, jobId:'' });
 
+    // Goal is optional — fall back to the default so an empty/cleared field still launches.
+    const prompt = this.state.prompt.trim() || this.defaultGoal();
     const fd = new FormData();
     this.fileObjs.forEach(f => fd.append('files', f));
-    fd.append('prompt', this.state.prompt);
+    fd.append('prompt', prompt);
     if(this.state.stimulus.trim()) fd.append('stimulus', this.state.stimulus);
     if(this.state.topOverride.trim()) fd.append('top_module', this.state.topOverride.trim());
     fd.append('mode', this.state.mode);
