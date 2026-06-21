@@ -36,8 +36,15 @@ export function Hero() {
           <p className="text-[15px] text-foreground/70 max-w-prose">
             Hand Cologic an RTL file and a goal. A loop of agents rewrites the Verilog for
             fewer gates and proves every version stays logically equivalent. The chip gets
-            smaller because the <em>code</em> gets better — no manual tuning.
+            smaller because the <em>code</em> gets better, no manual tuning.
           </p>
+          <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 font-[family-name:var(--font-jet)] text-xs text-muted-foreground">
+            <span><strong className="text-primary">−54%</strong> gates on mux4 (52→24)</span>
+            <span className="text-foreground/30">·</span>
+            <span>equivalence-proven</span>
+            <span className="text-foreground/30">·</span>
+            <span>FORGE = Kimi K2.7 Code on Fireworks</span>
+          </div>
           <div className="mt-6 flex flex-wrap gap-3">
             {AGENTS.map((a) => (
               <div

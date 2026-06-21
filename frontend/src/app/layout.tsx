@@ -11,7 +11,7 @@ const instrument = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Cologic — agents that optimize your Verilog",
+  title: "Cologic · agents that optimize your Verilog",
   description:
     "Cologic optimizes RTL: agents rewrite your Verilog for fewer gates while proving it stays equivalent.",
 };
