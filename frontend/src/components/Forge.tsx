@@ -29,6 +29,7 @@ export function Forge() {
   const [active, setActive] = useState<{ role: Role; line: number }>({ role: "PLAN", line: 6 });
   const [round, setRound] = useState(1285);
   const [walk, setWalk] = useState([0, 1, 2]); // each platform minion's current waypoint
+  const [copied, setCopied] = useState(false);
   const abort = useRef<AbortController | null>(null);
 
   // the platform minions stroll between waypoints — clearly-visible motion (not just a bob)
@@ -244,6 +245,50 @@ export function Forge() {
         )}
         {error && <span className="font-[family-name:var(--font-jet)] text-xs text-destructive">error: {error}</span>}
       </div>
+
+      {/* RESULT: the optimized code + a plain-English explanation, below, in full width */}
+      {outcome && (
+        <div className="mt-6 rounded-xl border border-primary/40 bg-card p-5 shadow-sm">
+          <div className="flex items-center gap-3 flex-wrap mb-2">
+            <h2 className="font-[family-name:var(--font-instrument)] text-2xl">
+              Optimized {outcome.topModule}.v
+            </h2>
+            <span className="font-[family-name:var(--font-jet)] text-xs rounded px-2 py-0.5 bg-primary/12 text-primary">
+              {outcome.baselineCells}→{outcome.bestCells} cells · −{pct}%
+            </span>
+            <span className="font-[family-name:var(--font-jet)] text-xs text-muted-foreground">
+              {outcome.equivalent ? "equivalence ✓ proven" : "not equivalent ✗"}
+            </span>
+            <button
+              onClick={() => {
+                navigator.clipboard?.writeText(outcome.bestRtl);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              }}
+              className="ml-auto font-[family-name:var(--font-jet)] text-xs text-primary hover:underline"
+            >
+              {copied ? "copied ✓" : "copy code"}
+            </button>
+          </div>
+          <p className="text-[14px] text-foreground/70 max-w-prose mb-4">
+            FORGE rewrote <code className="font-[family-name:var(--font-jet)]">{outcome.topModule}</code> for
+            fewer gates — {outcome.baselineCells} → {outcome.bestCells} cells (−{pct}%) — keeping the module
+            name, ports and widths identical. PROVE checked it against the original with an equivalence proof
+            {outcome.equivalent ? ", and it passed ✓." : " (failed ✗)."} Only the internal logic changed.
+          </p>
+          <div
+            className="rounded-lg border border-border bg-secondary/30 overflow-auto font-[family-name:var(--font-jet)] text-[12.5px] leading-[1.6] p-3"
+            style={{ maxHeight: 380 }}
+          >
+            {outcome.bestRtl.split("\n").map((l, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <span className="select-none w-7 text-right text-[#9b927d] shrink-0">{i + 1}</span>
+                <span className="whitespace-pre text-foreground/90">{hi(l)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

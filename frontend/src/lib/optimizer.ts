@@ -129,6 +129,17 @@ function stripFences(s: string): string {
     .trim();
 }
 
+// Pull just the Verilog module out of the model's reply — the backend sometimes
+// returns the model's raw reasoning ("we need to... let's think...") around the
+// code. Keep the last complete module...endmodule block (the final answer).
+function extractModule(s: string): string {
+  const t = stripFences(s);
+  // require a real declaration `module <name> (` or `module <name> #(` so the word
+  // "module" in prose ("optimized Verilog module...") doesn't start a false match.
+  const blocks = t.match(/\bmodule\s+[A-Za-z_]\w*\s*[#(][\s\S]*?\bendmodule\b/g);
+  return blocks && blocks.length ? blocks[blocks.length - 1].trim() : t;
+}
+
 function normalize(res: OptResult, baselineCells: number, topModule: string): OptOutcome {
   const history = res.history || [];
   const base = res.baseline_cells ?? baselineCells ?? 0;
@@ -149,7 +160,7 @@ function normalize(res: OptResult, baselineCells: number, topModule: string): Op
     areaImprovement:
       res.total_improvement ?? (base ? Math.max(0, (base - best) / base) : 0),
     equivalent: win?.equivalent ?? best <= base, // backend only keeps equivalent improvements
-    bestRtl: stripFences(rawRtl),
+    bestRtl: extractModule(rawRtl),
     topModule: topModule || "design",
     history,
   };
