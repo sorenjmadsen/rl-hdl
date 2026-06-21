@@ -110,6 +110,16 @@ def grade(candidate_rtl: str, task: Task, *, timeout: float = 60.0) -> GradeResu
     except YosysUnavailable:
         base_info["stage"] = "equivalent_no_ppa"
         return GradeResult(EQUIV_BASE, base_info)
+    except RuntimeError as e:
+        # Yosys is present but synthesis FAILED — almost always a candidate that
+        # Verilator's SV parser accepts (so it passed equivalence) yet Yosys's
+        # frontend rejects, or that won't map. It's equivalent but unsynthesizable,
+        # so we can't measure its area and it's not a usable optimization. Score it
+        # as a synth failure (low, never a winner) and hand the log back so the
+        # repair loop can react — never raise, or it crashes every caller.
+        base_info["stage"] = "synth_error"
+        base_info["log"] = (eq.log + "\n--- yosys FAILED ---\n" + str(e))[-4000:]
+        return GradeResult(COMPILE_ERROR_REWARD, base_info)
 
     improvement = (ref.cells - cand.cells) / ref.cells if ref.cells else 0.0
     reward = _clamp(EQUIV_BASE + ALPHA * improvement, EQUIV_FLOOR, 1.0)

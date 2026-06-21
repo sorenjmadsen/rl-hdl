@@ -30,8 +30,7 @@ import modal
 from openai import OpenAI
 
 from cologic.extract import extract_module
-from cologic.schema import Port
-from cologic.upload import task_from_rtl
+from cologic.upload import task_from_manifest_entry
 
 # The immutable verifier (Verilator + Yosys) is the DEPLOYED Modal function. We
 # use it only to RANK our own candidates; the official reward is recomputed by
@@ -184,12 +183,9 @@ def main() -> None:
     manifest = json.loads((dataset_dir / "manifest.json").read_text())
     trajectory = []
     for entry in manifest["designs"]:
-        rtl = (dataset_dir / entry["file"]).read_text()
-        interface = [Port(**p) for p in entry["ports"]] if entry.get("ports") else None
-        task = task_from_rtl(
-            rtl, task_id=entry["id"], top_module=entry.get("top_module"),
-            interface=interface, n_vectors=entry.get("n_vectors", 256), seed=entry.get("seed", 1),
-        )
+        # SHARED loader (clocked-aware) — matches evaluate.py so the task we
+        # optimize is exactly the task we're scored on.
+        task = task_from_manifest_entry(entry, dataset_dir)
         best_rtl, info, log = optimize_one(task)
         module = extract_module(best_rtl, task.top_module) or best_rtl
         (submission / f"{entry['id']}.v").write_text(module.strip() + "\n")

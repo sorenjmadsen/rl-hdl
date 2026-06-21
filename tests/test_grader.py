@@ -10,7 +10,13 @@ from __future__ import annotations
 import pytest
 
 from cologic.designs import MUL8_BASELINE, MUL8_BROKEN, MUL8_GOOD, mul8
-from cologic.grader import EQUIV_BASE, EQUIV_FLOOR, NOT_EQUIVALENT_REWARD, grade
+from cologic.grader import (
+    COMPILE_ERROR_REWARD,
+    EQUIV_BASE,
+    EQUIV_FLOOR,
+    NOT_EQUIVALENT_REWARD,
+    grade,
+)
 from cologic.grader.ppa import (
     _cell_count_from_stat,
     _chip_area_from_stat,
@@ -24,6 +30,24 @@ def test_golden_is_equivalent_to_itself():
     assert r.info["equivalent"] is True
     assert r.info["eq_passed"] == r.info["eq_total"] > 0
     assert r.reward >= EQUIV_BASE
+
+
+def test_yosys_synth_failure_scores_not_crashes(monkeypatch):
+    """A candidate that passes Verilator equivalence but trips Yosys synthesis must
+    score as a synth failure (low, never a winner) — never raise, or it crashes the
+    whole harness (the gen_2 SIA crash). Verilator runs for real; we simulate the
+    Yosys failure so the test is deterministic without yosys installed."""
+    from cologic.grader.ppa import YosysUnavailable  # noqa: F401 — ensure import path
+
+    def boom(*_a, **_k):
+        raise RuntimeError("yosys failed (rc=1):\ndesign.sv:3: ERROR: syntax error, unexpected '['")
+
+    monkeypatch.setattr("cologic.grader.synth_cells", boom)
+    r = grade(MUL8_GOOD, mul8)  # MUL8_GOOD is genuinely equivalent under Verilator
+    assert r.info["equivalent"] is True          # equivalence still passed
+    assert r.info["stage"] == "synth_error"
+    assert r.reward == COMPILE_ERROR_REWARD       # low; loses to any real equivalent design
+    assert "yosys FAILED" in r.info["log"]
 
 
 def test_good_rewrite_passes_the_gate():

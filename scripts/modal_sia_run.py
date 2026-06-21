@@ -52,11 +52,6 @@ app = modal.App("rl-hdl-sia")
 TASK_DIR = f"{REPO}/sia_task/rtl-optimize"
 
 
-def _public_designs() -> list:
-    from pathlib import Path
-    return json.loads((Path(TASK_DIR) / "data/public/manifest.json").read_text())["designs"]
-
-
 @app.function(image=sia_image, timeout=300)
 def validate() -> dict:
     """Cheap preflight: image built, sia importable, task/profiles well-formed. No LLM calls."""
@@ -135,13 +130,22 @@ def claude_check_entry():
 def sia_run_remote(
     max_gen: int, run_id: int, target_model: str, meta_model: str,
     n_candidates: int, temperature: float, max_repair: int, meta_max_turns: int,
+    upload: dict | None = None,
 ) -> dict:
-    """Run `sia run` for the harness lever and return each generation's score."""
+    """Run the full SIA loop (meta agent evolves the scaffold) and return each
+    generation's score plus the refined RTL.
+
+    With `upload` (the web flow) it optimizes ONE user-supplied design instead of
+    the baked-in public benchmark — see `_prepare_upload_task_dir` for the dataset
+    it injects. Without it, it runs the public manifest (the `main` entrypoint).
+    """
     import os
     import subprocess
     from pathlib import Path
 
-    task = Path(TASK_DIR)
+    # Point SIA at the uploaded design's dataset, or the baked-in public manifest.
+    task = _prepare_upload_task_dir(upload, run_id) if upload else Path(TASK_DIR)
+    n_designs = len(json.loads((task / "data/public/manifest.json").read_text())["designs"])
 
     # The target agent runs in SIA's per-generation venv; it needs cologic (Task
     # building from RTL), openai (sampling), and modal (to call the deployed verifier).
@@ -182,7 +186,7 @@ def sia_run_remote(
         "--meta-agent-profile", "claude-meta",
         "--target-agent-profile", "fireworks-target",
     ]
-    print(f"[SIA] launching {max_gen} generations on {len(_public_designs())} designs "
+    print(f"[SIA] launching {max_gen} generations on {n_designs} design(s) "
           f"(target={target_model}, meta={meta_model})\n", flush=True)
 
     # Stream live (stderr merged) so stages show up in `modal run` as they happen,
@@ -210,10 +214,16 @@ def sia_run_remote(
         gen_dirs = sorted(run_dir.glob("gen_*"))
         for gdir in gen_dirs:
             rj = gdir / "results.json"
+            # The refined Verilog the agent submitted this generation (id -> RTL).
+            submission: dict[str, str] = {}
+            for vf in sorted((gdir / "submission").glob("*.v")):
+                submission[vf.stem] = vf.read_text(errors="replace")[:CAP]
+                _grab(vf, f"{gdir.name}/submission/{vf.name}")
             generations.append({
                 "gen": gdir.name,
                 "results": json.loads(rj.read_text()) if rj.exists() else None,
                 "has_target_agent": (gdir / "target_agent.py").exists(),
+                "submission": submission,
             })
             _grab(gdir / "target_agent.py", f"{gdir.name}/target_agent.py")
             _grab(gdir / "results.json", f"{gdir.name}/results.json")
@@ -230,9 +240,20 @@ def sia_run_remote(
                     lineterm="")
                 artifacts["target_agent_gen1_to_gen2.diff"] = "\n".join(diff)[:CAP]
 
+    # Best generation = highest mean_reward; surface its refined RTL as the result.
+    scored = [g for g in generations if g["results"]]
+    best = max(scored, key=lambda g: g["results"].get("mean_reward", 0.0), default=None)
+
     artifacts["run_log_tail.txt"] = "".join(lines)[-20000:]
-    return {"returncode": rc, "stdout_tail": "".join(lines)[-6000:],
-            "generations": generations, "artifacts": artifacts}
+    return {
+        "returncode": rc,
+        "stdout_tail": "".join(lines)[-6000:],
+        "generations": generations,
+        "artifacts": artifacts,
+        "best_gen": best["gen"] if best else None,
+        "best_mean_reward": best["results"].get("mean_reward") if best else None,
+        "best_rtl": best["submission"] if best else {},
+    }
 
 
 @app.function(image=sia_image, secrets=[modal.Secret.from_name("fireworks-api")], timeout=1800, cpu=2.0)
@@ -277,6 +298,38 @@ def _patch_profile(path, model: str) -> None:
     data = json.loads(path.read_text())
     data["model"] = model
     path.write_text(json.dumps(data, indent=2) + "\n")
+
+
+def _prepare_upload_task_dir(upload: dict, run_id: int):
+    """Build a per-run SIA task dir whose public dataset IS the uploaded design.
+
+    Copies the canonical task dir (task.md / evaluate.py / reference agent / profiles)
+    and replaces data/public with a one-entry manifest pointing at the uploaded
+    files (+ scaffold stimulus for clocked designs). The manifest schema is exactly
+    what cologic.upload.task_from_manifest_entry consumes, so the agent + evaluate.py
+    build the same Task they would for a registered design.
+
+    `upload` keys: id, files {name: content}, stimulus?, top_module?, prompt?,
+    n_vectors?, seed?.
+    """
+    import shutil
+    import sys
+    from pathlib import Path
+
+    # sia_image copies the repo to REPO but doesn't put it on sys.path (cologic is
+    # only pip-installed inside the per-generation venvs). The orchestrator needs
+    # the shared dataset writer, so make cologic importable here.
+    if REPO not in sys.path:
+        sys.path.insert(0, REPO)
+    from cologic.upload import write_upload_dataset
+
+    dst = Path(f"/root/task_upload_{run_id}")
+    if dst.exists():
+        shutil.rmtree(dst)
+    shutil.copytree(TASK_DIR, dst)
+    # Replace the baked-in benchmark dataset with the uploaded design (shared writer).
+    write_upload_dataset(dst / "data" / "public", upload)
+    return dst
 
 
 @app.local_entrypoint()

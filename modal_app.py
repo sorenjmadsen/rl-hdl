@@ -17,6 +17,16 @@ from pathlib import Path
 
 import modal
 
+# FastAPI resolves route annotations against this module's globals. Under
+# `from __future__ import annotations` the `list[UploadFile]` hint on /optimize is
+# a string, so UploadFile must be importable at module scope (not just inside
+# web()). Guarded so local imports without fastapi still succeed — the web image
+# always ships it.
+try:
+    from fastapi import UploadFile
+except ModuleNotFoundError:
+    UploadFile = None
+
 VERILATOR_TAG = "v5.038"
 
 # Open standard-cell library for real-area (um^2) measurement. Single self-contained
@@ -69,6 +79,18 @@ inference_image = (
     .pip_install("openai>=1.0")
     .add_local_python_source("cologic")
 )
+
+# The public web API (FastAPI/ASGI). It only builds Tasks from uploads and
+# spawns/polls the optimization functions, so it stays light — no toolchain, no
+# Fireworks client. Verilator/Yosys/Fireworks live in the worker functions it calls.
+web_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install("fastapi[standard]")
+    .add_local_python_source("cologic")
+)
+
+# Default Fireworks policy for the upload flow (matches the flywheel_run entrypoint).
+DEFAULT_MODEL = "accounts/fireworks/models/kimi-k2p7-code"
 
 app = modal.App("rl-hdl")
 
@@ -216,6 +238,146 @@ def flywheel_remote(task, model: str, n_candidates: int, temperature: float,
                      "area_um2": g.area_um2} for g in res.history],
         "best_rtl": res.best_rtl,
     }
+
+
+@app.function(image=grader_image, timeout=120)
+def validate_upload_remote(task) -> dict:
+    """Cheap pre-flight: grade the uploaded reference against ITSELF.
+
+    A well-formed interface + testbench must grade the design equivalent to itself
+    over a non-empty number of comparisons. This catches a malformed scaffold
+    stimulus or a mis-parsed interface in ~one Verilator build, before we spend a
+    full (minutes-long) optimization loop on it.
+    """
+    from cologic.grader import grade
+
+    r = grade(task.reference_rtl, task)
+    return {
+        "ok": bool(r.info.get("equivalent")) and (r.info.get("eq_total") or 0) > 0,
+        "stage": r.info.get("stage"),
+        "eq_total": r.info.get("eq_total"),
+        "baseline_cells": r.info.get("cand_cells") or r.info.get("ref_cells"),
+        "log": (r.info.get("log") or "")[-2000:],
+    }
+
+
+@app.function(
+    image=web_image,
+    secrets=[modal.Secret.from_name("rlhdl-web")],  # provides RLHDL_WEB_TOKEN
+    timeout=300,
+    # Cold-starts on first hit; add min_containers=1 to keep it warm (costs $).
+)
+@modal.asgi_app()
+def web():
+    """Public optimizer API for the Vercel frontend.
+
+    POST /optimize  (multipart): files[] (.v), prompt, optional stimulus +
+                    top_module + knobs -> {job_id}. Spawns the flywheel async.
+    GET  /jobs/{id}: poll -> {status: running|done|error, result?}.
+
+    Auth: a shared token in the `X-RLHDL-Token` header, compared to the
+    RLHDL_WEB_TOKEN secret. Create it once with:
+        modal secret create rlhdl-web RLHDL_WEB_TOKEN=<pick-a-token>
+    If the secret is empty/unset the API runs open (dev only).
+    """
+    import os
+
+    from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
+    from fastapi.middleware.cors import CORSMiddleware
+
+    api = FastAPI(title="rl-hdl optimizer")
+    # No custom domain yet; allow any origin (the shared token is the gate).
+    api.add_middleware(
+        CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+    )
+    token = os.environ.get("RLHDL_WEB_TOKEN") or ""
+
+    def check_auth(supplied: str | None) -> None:
+        if token and supplied != token:
+            raise HTTPException(status_code=401, detail="missing or invalid X-RLHDL-Token")
+
+    @api.post("/optimize")
+    async def optimize(
+        prompt: str = Form(...),
+        stimulus: str | None = Form(None),
+        top_module: str | None = Form(None),
+        mode: str = Form("sia"),                  # "sia" (scaffold evolution) | "harness"
+        n_candidates: int = Form(4),
+        temperature: float = Form(0.9),
+        max_repair_rounds: int = Form(1),
+        max_generations: int = Form(2),           # SIA generations are expensive — keep low
+        patience: int = Form(3),                  # harness mode only
+        meta_model: str = Form("sonnet"),         # SIA meta/feedback agent (Claude)
+        meta_max_turns: int = Form(60),           # SIA mode only
+        model: str = Form(DEFAULT_MODEL),         # target policy (Fireworks)
+        files: list[UploadFile] = File(...),
+        x_rlhdl_token: str | None = Header(default=None),
+    ):
+        check_auth(x_rlhdl_token)
+        from cologic.upload import task_from_upload
+
+        sources = {f.filename: (await f.read()).decode("utf-8", "replace") for f in files}
+        try:
+            task = task_from_upload(
+                sources, prompt=prompt, stimulus=stimulus, top_module=top_module,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # Pre-flight (both modes): a malformed interface/testbench fails fast here,
+        # before a long, billable optimization run.
+        v = validate_upload_remote.remote(task)
+        if not v["ok"]:
+            raise HTTPException(
+                status_code=400,
+                detail=(f"pre-flight failed (stage={v['stage']}): the interface/testbench "
+                        f"does not grade the design equivalent to itself.\n{v['log'][-800:]}"),
+            )
+
+        if mode == "sia":
+            # Full SIA loop (meta agent evolves the scaffold) — a separate app.
+            import time
+
+            upload = {
+                "id": task.top_module,
+                "files": sources,
+                "stimulus": stimulus,
+                "top_module": top_module or task.top_module,
+                "prompt": prompt,
+                "n_vectors": task.n_vectors,
+                "seed": task.seed,
+            }
+            sia = modal.Function.from_name("rl-hdl-sia", "sia_run_remote")
+            call = sia.spawn(
+                max_generations, int(time.time()), model, meta_model,
+                n_candidates, temperature, max_repair_rounds, meta_max_turns, upload,
+            )
+        else:
+            call = flywheel_remote.spawn(
+                task, model, n_candidates, temperature,
+                max_repair_rounds, max_generations, patience,
+            )
+
+        return {
+            "job_id": call.object_id,
+            "mode": mode,
+            "top_module": task.top_module,
+            "clocked": task.clocked,
+            "baseline_cells": v["baseline_cells"],
+        }
+
+    @api.get("/jobs/{job_id}")
+    async def job(job_id: str, x_rlhdl_token: str | None = Header(default=None)):
+        check_auth(x_rlhdl_token)
+        fc = modal.FunctionCall.from_id(job_id)
+        try:
+            return {"status": "done", "result": fc.get(timeout=0)}
+        except TimeoutError:
+            return {"status": "running"}
+        except Exception as e:  # noqa: BLE001 — surface a remote failure as JSON, not 500
+            return {"status": "error", "error": str(e)}
+
+    return api
 
 
 @app.function(image=harness_image, secrets=[modal.Secret.from_name("fireworks-api")], timeout=3600)

@@ -21,44 +21,29 @@ from pathlib import Path
 PUBLIC = Path(__file__).resolve().parent  # .../data/public
 
 
-def _designs() -> list[dict]:
-    manifest = json.loads((PUBLIC / "manifest.json").read_text())
-    out = []
-    for e in manifest["designs"]:
-        out.append({
-            "id": e["id"],
-            "rtl": (PUBLIC / e["file"]).read_text(),
-            "top_module": e.get("top_module"),
-            "ports": e.get("ports"),
-            "n_vectors": e.get("n_vectors", 256),
-            "seed": e.get("seed", 1),
-        })
-    return out
+def _entries() -> list[dict]:
+    return json.loads((PUBLIC / "manifest.json").read_text())["designs"]
 
 
 def evaluate(gen_dir: Path) -> dict:
     import modal
 
-    from cologic.schema import Port
-    from cologic.upload import task_from_rtl
+    from cologic.upload import task_from_manifest_entry
 
     # The immutable verifier (Verilator + Yosys) is the deployed Modal function —
     # we never carry the toolchain here; we call it by name.
     grader = modal.Function.from_name("rl-hdl", "grade_opt_remote")
     sub_dir = gen_dir / "submission"
     designs = []
-    entries = _designs()
+    entries = _entries()
     print(f"[EVAL] scoring {len(entries)} submitted designs via the deployed verifier", flush=True)
-    for d in entries:
-        interface = [Port(**p) for p in d["ports"]] if d["ports"] else None
-        task = task_from_rtl(
-            d["rtl"], task_id=d["id"], top_module=d["top_module"],
-            interface=interface, n_vectors=d["n_vectors"], seed=d["seed"],
-        )
-        f = sub_dir / f"{d['id']}.v"
+    for e in entries:
+        # SHARED loader (clocked-aware) — must match the target agent exactly.
+        task = task_from_manifest_entry(e, PUBLIC)
+        f = sub_dir / f"{e['id']}.v"
         if not f.exists():
-            print(f"[EVAL] {d['id']}: no submission (missing)", flush=True)
-            designs.append({"id": d["id"], "reward": 0.0, "stage": "missing",
+            print(f"[EVAL] {e['id']}: no submission (missing)", flush=True)
+            designs.append({"id": e["id"], "reward": 0.0, "stage": "missing",
                             "equivalent": False, "ref_cells": None, "cand_cells": None,
                             "area_improvement": None, "ref_area_um2": None,
                             "cand_area_um2": None, "area_um2_improvement": None})
@@ -69,10 +54,10 @@ def evaluate(gen_dir: Path) -> dict:
                  if i.get("cand_cells") is not None else "n/a")
         ai = i.get("area_improvement")
         ai_s = f" ({ai * 100:+.1f}%)" if ai is not None else ""
-        print(f"[EVAL] {d['id']}: equiv={bool(i.get('equivalent'))} cells {cells}{ai_s} "
+        print(f"[EVAL] {e['id']}: equiv={bool(i.get('equivalent'))} cells {cells}{ai_s} "
               f"reward={gr['reward']:.3f}", flush=True)
         designs.append({
-            "id": d["id"], "reward": gr["reward"], "stage": i.get("stage"),
+            "id": e["id"], "reward": gr["reward"], "stage": i.get("stage"),
             "equivalent": bool(i.get("equivalent")),
             "ref_cells": i.get("ref_cells"), "cand_cells": i.get("cand_cells"),
             "area_improvement": i.get("area_improvement"),
