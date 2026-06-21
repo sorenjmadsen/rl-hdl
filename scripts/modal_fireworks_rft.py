@@ -26,11 +26,18 @@ METHOD_ALIASES = {
 
 launcher_image = (
     modal.Image.debian_slim(python_version="3.11")
-    .apt_install("build-essential", "ca-certificates", "verilator")
+    # verilator = equivalence gate; yosys = PPA stage (needed for the optimize objective).
+    .apt_install("build-essential", "ca-certificates", "verilator", "yosys")
     .pip_install("eval-protocol>=0.3.31", "pytest>=8")
     .add_local_python_source("cologic")
     .add_local_dir("fireworks_rft", remote_path="/root/fireworks_rft")
 )
+
+# Reward function (Eval Protocol test file) per training objective.
+REWARD_TEST = {
+    "generate": "test_cologic_reward.py",      # write Verilog from spec (verifier.grade)
+    "optimize": "test_cologic_opt_reward.py",  # rewrite smaller, equivalent (grader.grade)
+}
 
 
 def _copytree(src: Path, dst: Path) -> None:
@@ -64,9 +71,20 @@ def _normalize_output_model(output_model: str, account: str) -> str:
     return output_model
 
 
-def _assemble(workdir: Path, split: str, max_rows: int | None) -> Path:
+def _assemble(workdir: Path, split: str, max_rows: int | None, objective: str) -> Path:
     import cologic
-    from cologic.rft import rows_for_task_ids, split_task_ids, write_jsonl
+    from cologic.rft import (
+        opt_rows_for_task_ids,
+        opt_split_task_ids,
+        rows_for_task_ids,
+        split_task_ids,
+        write_jsonl,
+    )
+
+    if objective == "optimize":
+        ids_for, rows_for = opt_split_task_ids, opt_rows_for_task_ids
+    else:
+        ids_for, rows_for = split_task_ids, rows_for_task_ids
 
     upload_dir = workdir / "cologic_fireworks_rft"
     template_dir = Path("/root/fireworks_rft")
@@ -75,13 +93,20 @@ def _assemble(workdir: Path, split: str, max_rows: int | None) -> Path:
     package_dir = Path(cologic.__file__).resolve().parent
     _copytree(package_dir, upload_dir / "cologic")
 
-    task_ids = split_task_ids(split)
+    # Keep exactly one evaluator in the upload dir so `eval-protocol create rft`
+    # is unambiguous about which reward function to train against.
+    for obj, fname in REWARD_TEST.items():
+        if obj != objective:
+            (upload_dir / fname).unlink(missing_ok=True)
+
+    task_ids = ids_for(split)
     if max_rows:
         task_ids = task_ids[:max_rows]
-    write_jsonl(rows_for_task_ids(task_ids), upload_dir / "dataset.jsonl")
-    write_jsonl(rows_for_task_ids(task_ids[: min(2, len(task_ids))], include_golden=True), upload_dir / "smoke_dataset.jsonl")
+    write_jsonl(rows_for(task_ids), upload_dir / "dataset.jsonl")
+    write_jsonl(rows_for(task_ids[: min(2, len(task_ids))], include_golden=True), upload_dir / "smoke_dataset.jsonl")
 
     manifest = {
+        "objective": objective,
         "split": split,
         "rows": len(task_ids),
         "task_ids": task_ids,
@@ -117,9 +142,14 @@ def launch_remote(
     max_concurrent_rollouts: int,
     max_concurrent_evaluations: int,
     method: str,
+    objective: str,
 ) -> dict:
+    reward_test = REWARD_TEST.get(objective)
+    if reward_test is None:
+        raise ValueError(f"unknown objective {objective!r}; choose from {sorted(REWARD_TEST)}")
+
     workdir = Path("/tmp/cologic-rft")
-    upload_dir = _assemble(workdir, split, max_rows)
+    upload_dir = _assemble(workdir, split, max_rows, objective)
     output_model = _normalize_output_model(output_model, account)
 
     if not skip_smoke:
@@ -131,7 +161,7 @@ def launch_remote(
             "COLOGIC_RFT_ROLLOUT_MODEL": base_model,
             "COLOGIC_RFT_MAX_OUTPUT_TOKENS": str(max_output_tokens),
         }
-        _run(["pytest", "-q", "test_cologic_reward.py"], cwd=upload_dir, env=smoke_env)
+        _run(["pytest", "-q", reward_test], cwd=upload_dir, env=smoke_env)
 
     cmd = [
         "eval-protocol",
@@ -214,7 +244,8 @@ def launch(
     base_model: str = "accounts/fireworks/models/gemma-4-26b-a4b-it",
     output_model: str = "cologic-gemma-rtl-rft",
     account: str = "",
-    split: str = "rft",
+    objective: str = "generate",
+    split: str = "",
     max_rows: int = 0,
     dry_run: bool = False,
     force: bool = False,
@@ -231,11 +262,18 @@ def launch(
     max_concurrent_evaluations: int = 4,
     method: str = "",
 ):
-    """Assemble, smoke-test, and launch the Fireworks RFT job."""
+    """Assemble, smoke-test, and launch the Fireworks RFT job.
+
+    objective="generate" trains spec->Verilog (default split "rft"); objective="optimize"
+    trains rewrite-smaller-but-equivalent (default split "opt"). Override --split to narrow.
+    """
+    if not split:
+        split = "opt" if objective == "optimize" else "rft"
     result = launch_remote.remote(
         base_model=base_model,
         output_model=output_model,
         account=account,
+        objective=objective,
         split=split,
         max_rows=max_rows or None,
         dry_run=dry_run,

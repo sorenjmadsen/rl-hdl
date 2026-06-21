@@ -63,5 +63,51 @@ mul8 = Task(
     tags=["comb", "arith", "headroom:resource-share"],
 )
 
-OPT_TASKS: list[Task] = [mul8]
+# --- mux4: a verbose one-hot AND/OR datapath; the win is collapsing to a select. ---
+MUX4_BASELINE = """module mux4(input [7:0] a, input [7:0] b, input [7:0] c, input [7:0] d,
+            input [1:0] sel, output [7:0] y);
+  wire s0 = (sel == 2'd0);
+  wire s1 = (sel == 2'd1);
+  wire s2 = (sel == 2'd2);
+  wire s3 = (sel == 2'd3);
+  assign y = ({8{s0}} & a) | ({8{s1}} & b) | ({8{s2}} & c) | ({8{s3}} & d);
+endmodule
+"""
+
+mux4 = Task(
+    task_id="opt_mux4",
+    top_module="mux4",
+    spec="Optimize this 4-to-1 multiplexer for gate count while preserving its function.",
+    interface=[
+        Port("a", "input", 8), Port("b", "input", 8), Port("c", "input", 8),
+        Port("d", "input", 8), Port("sel", "input", 2), Port("y", "output", 8),
+    ],
+    reference_rtl=MUX4_BASELINE,
+    n_vectors=256,
+    tags=["comb", "mux", "headroom:select-collapse"],
+)
+
+# --- popcount8: a serial accumulate loop; the win is a balanced adder tree. ---
+POPCOUNT8_BASELINE = """module popcount8(input [7:0] a, output reg [3:0] count);
+  integer i;
+  always @(*) begin
+    count = 0;
+    for (i = 0; i < 8; i = i + 1)
+      count = count + a[i];
+  end
+endmodule
+"""
+
+popcount8 = Task(
+    task_id="opt_popcount8",
+    top_module="popcount8",
+    spec="Optimize this 8-bit population count for gate count while preserving its function.",
+    interface=[Port("a", "input", 8), Port("count", "output", 4)],
+    reference_rtl=POPCOUNT8_BASELINE,
+    n_vectors=256,
+    tags=["comb", "reduction", "headroom:adder-tree"],
+)
+
+OPT_TASKS: list[Task] = [mul8, mux4, popcount8]
 BY_ID = {t.task_id: t for t in OPT_TASKS}
+

@@ -14,7 +14,9 @@ import json
 from collections.abc import Iterable
 from pathlib import Path
 
-from cologic.prompt import build_messages
+from cologic.designs import BY_ID as OPT_BY_ID
+from cologic.designs import OPT_TASKS
+from cologic.prompt import build_messages, build_optimize_messages
 from cologic.schema import Task
 from cologic.tasks import BY_ID, GRADIENT_TASKS, HELDOUT_TASKS, SEED_TASKS, TRAIN_TASKS
 
@@ -53,6 +55,55 @@ def rows_for_task_ids(task_ids: Iterable[str], *, include_golden: bool = False) 
             raise KeyError(f"unknown task_id {task_id!r}; known task ids: {known}") from exc
         rows.append(task_to_row(task, include_golden=include_golden))
     return rows
+
+
+def opt_task_to_row(task: Task, *, include_golden: bool = False) -> dict:
+    """One Eval Protocol row for the OPTIMIZATION objective.
+
+    The prompt asks the policy to rewrite `task.reference_rtl` smaller (same
+    interface); the evaluator grades the completion with the gate-then-climb
+    grader (equivalence + Yosys PPA). `include_golden` seeds the baseline itself
+    as the assistant turn — it is equivalent, so it scores the equivalence floor,
+    a clean smoke signal.
+    """
+    messages = build_optimize_messages(task)
+    if include_golden:
+        messages = [*messages, {"role": "assistant", "content": f"```verilog\n{task.reference_rtl}\n```"}]
+    return {
+        "messages": messages,
+        "input_metadata": {
+            "row_id": task.task_id,
+            "dataset_info": {
+                "task_id": task.task_id,
+                "top_module": task.top_module,
+                "held_out": task.held_out,
+                "clocked": task.clocked,
+                "tags": list(task.tags),
+                "objective": "optimize",
+            },
+        },
+    }
+
+
+def opt_rows_for_task_ids(task_ids: Iterable[str], *, include_golden: bool = False) -> list[dict]:
+    rows = []
+    for task_id in task_ids:
+        try:
+            task = OPT_BY_ID[task_id]
+        except KeyError as exc:
+            known = ", ".join(sorted(OPT_BY_ID))
+            raise KeyError(f"unknown optimization task_id {task_id!r}; known: {known}") from exc
+        rows.append(opt_task_to_row(task, include_golden=include_golden))
+    return rows
+
+
+def opt_split_task_ids(split: str) -> list[str]:
+    """Optimization task splits. `opt` = all curated optimization designs."""
+    if split in ("opt", "all"):
+        return [t.task_id for t in OPT_TASKS]
+    if split == "smoke":
+        return [t.task_id for t in OPT_TASKS[: min(2, len(OPT_TASKS))]]
+    raise ValueError(f"unknown optimization split {split!r}")
 
 
 def write_jsonl(rows: Iterable[dict], path: str | Path) -> Path:

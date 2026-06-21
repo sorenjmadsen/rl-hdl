@@ -33,3 +33,28 @@ def build_messages(task: Task) -> list[dict]:
         {"role": "system", "content": SYSTEM},
         {"role": "user", "content": build_user_prompt(task)},
     ]
+
+
+SYSTEM_OPTIMIZE = (
+    "You are an expert hardware engineer. You are given a CORRECT Verilog module and must "
+    "rewrite it to use FEWER gates while preserving EXACT functional equivalence. Keep the "
+    "module name, port names, directions, and widths identical. Respond with exactly one "
+    "Verilog module in a single ```verilog code block — no explanation, no testbench, no prose."
+)
+
+
+def build_optimize_messages(task: Task) -> list[dict]:
+    """Chat messages for the OPTIMIZATION objective: rewrite `task.reference_rtl`
+    (a correct baseline) into a smaller, equivalent module with the same interface.
+
+    Used by the RFT weight lever so the policy is trained to optimize, not generate.
+    The reward still comes only from the immutable grader (equivalence + Yosys PPA).
+    """
+    return [
+        {"role": "system", "content": SYSTEM_OPTIMIZE},
+        {"role": "user", "content": (
+            f"Optimize this module for gate count while keeping it exactly equivalent.\n\n"
+            f"```verilog\n{task.reference_rtl}\n```\n\n"
+            f"Return the optimized module `{task.top_module}` with the same name and interface."
+        )},
+    ]
