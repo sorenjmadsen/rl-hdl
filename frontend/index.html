@@ -268,8 +268,8 @@
           </div>
           <sc-if value="{{ hasReward }}" hint-placeholder-val="{{ false }}">
             <div style="flex:1;min-width:160px;border:1px solid var(--line-2);background:var(--bg-1);padding:14px">
-              <div style="font-size:10px;color:var(--muted);letter-spacing:.14em">BEST REWARD</div>
-              <div style="font-size:20px;font-weight:700;color:var(--text);margin-top:4px">{{ bestReward }}</div>
+              <div style="font-size:10px;color:var(--muted);letter-spacing:.14em">BEST AREA &#916;</div>
+              <div style="font-size:20px;font-weight:700;color:var(--accent-bright);margin-top:4px">{{ bestAreaDelta }}</div>
               <div style="font-size:10px;color:var(--muted);margin-top:3px">{{ bestGenLabel }}</div>
             </div>
           </sc-if>
@@ -899,7 +899,7 @@ endmodule
       equivText, equivColor, equivBorder, equivBg,
       cellsBaseline, cellsBest, cellsPct,
       hasReward: !!(norm && norm.kind==='sia'),
-      bestReward: norm && norm.bestReward!=null ? this.fmtNum(norm.bestReward,2) : '—',
+      bestAreaDelta: norm && norm.improvement!=null ? '−'+(norm.improvement*100).toFixed(1)+'%' : '—',
       bestGenLabel: norm && norm.bestGen ? norm.bestGen : '',
 
       isSiaResult: !!(norm && norm.kind==='sia'),
