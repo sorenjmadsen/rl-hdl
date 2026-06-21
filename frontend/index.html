@@ -617,40 +617,109 @@ class Component extends DCLogic {
     this.fileObjs = [];
     this.setState({
       demo:true, phase:'submitting',
-      fileMeta:[{name:'mux4.v', size:'1.2 K'}],
-      prompt:'Optimize this 4:1 mux for gate count while preserving behavior.',
+      fileMeta:[{name:'tt_um_tpu.v', size:'1.8 K'}],
+      prompt:'Optimize this 2x2 signed matrix-multiply accelerator for gate count while preserving its exact cycle-accurate I/O behaviour (it loads matrices A and B and outputs a selected element of A*B).',
       mode:'sia', elapsed:0, result:null, norm:null, parse:null, jobId:''
     });
     const t1 = setTimeout(()=>{
-      this.setState({ phase:'running', jobId:'fc-demo-9a3f', parse:{top_module:'mux4', clocked:false, baseline_cells:60, mode:'sia'} });
+      this.setState({ phase:'running', jobId:'fc-demo-tpu1', parse:{top_module:'tt_um_tpu', clocked:true, baseline_cells:1460, mode:'sia'} });
       this.startTimers();
     }, 900);
     const t2 = setTimeout(()=>{
       this.clearTimers();
-      this.setState({ elapsed: 47 });
+      this.setState({ elapsed: 312 });
       this.finish(this.demoResult());
     }, 4200);
     this._timers.push(t1, t2);
   }
 
   demoResult(){
-    const rtl = 'module mux4(\n  input  [1:0] sel,\n  input        a, b, c, d,\n  output       y\n);\n  // evolved: collapsed to a single 4:1 select tree\n  assign y = sel[1] ? (sel[0] ? d : c)\n                    : (sel[0] ? b : a);\nendmodule\n';
+    const rtl = `module tt_um_tpu (
+    input  wire [7:0] ui_in,
+    output wire [7:0] uo_out,
+    input  wire [7:0] uio_in,
+    output wire [7:0] uio_out,
+    output wire [7:0] uio_oe,
+    input  wire       ena,
+    input  wire       clk,
+    input  wire       rst_n
+);
+    reg signed [7:0] a [0:3];
+    reg signed [7:0] b [0:3];
+
+    wire load_en = uio_in[0];
+    wire load_sel_b = uio_in[1];
+    wire [1:0] load_index = uio_in[3:2];
+    wire output_en = uio_in[4];
+    wire [1:0] output_sel = uio_in[6:5];
+
+    integer i;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            for (i = 0; i < 4; i = i + 1) begin
+                a[i] <= 8'sd0;
+                b[i] <= 8'sd0;
+            end
+        end else if (load_en) begin
+            if (load_sel_b)
+                b[load_index] <= ui_in;
+            else
+                a[load_index] <= ui_in;
+        end
+    end
+
+    wire row = output_sel[1];
+    wire col = output_sel[0];
+
+    wire signed [15:0] prod0 = a[{row, 1'b0}] * b[{1'b0, col}];
+    wire signed [15:0] prod1 = a[{row, 1'b1}] * b[{1'b1, col}];
+    wire signed [15:0] sum   = prod0 + prod1;
+
+    wire [7:0] selected = sum[7:0];
+
+    assign uo_out = output_en ? selected : 8'd0;
+    assign uio_out = {output_en, 7'b0};
+    assign uio_oe = 8'b1000_0000;
+
+    wire _unused = &{ena, uio_in[7]};
+endmodule
+`;
     return {
-      returncode:0, best_gen:'gen_1', best_mean_reward:0.8,
-      best_rtl:{ mux4: rtl },
+      returncode:0, best_gen:'gen_2', best_mean_reward:0.846918,
+      best_rtl:{ tt_um_tpu: rtl },
       generations:[
         { gen:'gen_1', has_target_agent:true,
-          results:{ mean_reward:0.8, mean_area_improvement:0.6, n_equivalent:1, n_total:1,
-            designs:[{ id:'mux4', reward:0.8, stage:'graded', equivalent:true, ref_cells:60, cand_cells:24, area_improvement:0.6 }] },
-          submission:{ mux4: rtl } },
+          results:{ mean_reward:0.5, mean_area_improvement:0.0, mean_area_um2_improvement:0.0, n_equivalent:1, n_total:1,
+            designs:[{ id:'tt_um_tpu', reward:0.5, stage:'graded', equivalent:true, ref_cells:1460, cand_cells:1460, area_improvement:0.0, ref_area_um2:1991.01, cand_area_um2:1991.01, area_um2_improvement:0.0 }] },
+          submission:{} },
         { gen:'gen_2', has_target_agent:true,
-          results:{ mean_reward:0.62, mean_area_improvement:0.42, n_equivalent:1, n_total:1,
-            designs:[{ id:'mux4', reward:0.62, stage:'graded', equivalent:true, ref_cells:60, cand_cells:35, area_improvement:0.42 }] },
-          submission:{ mux4: rtl } }
+          results:{ mean_reward:0.846918, mean_area_improvement:0.693836, mean_area_um2_improvement:0.538277, n_equivalent:1, n_total:1,
+            designs:[{ id:'tt_um_tpu', reward:0.846918, stage:'graded', equivalent:true, ref_cells:1460, cand_cells:447, area_improvement:0.693836, ref_area_um2:1991.01, cand_area_um2:919.296, area_um2_improvement:0.538277 }] },
+          submission:{ tt_um_tpu: rtl } }
       ],
       artifacts:{ 'target_agent_gen1_to_gen2.diff':
-        '--- a/target_agent.py\n+++ b/target_agent.py\n@@ -18,9 +18,12 @@ def build_prompt(spec):\n-    hints = "Rewrite the module for clarity."\n+    hints = (\n+        "Collapse nested case/if into a balanced select tree. "\n+        "Prefer continuous assigns over procedural always blocks "\n+        "when the logic is purely combinational."\n+    )\n@@ -41,6 +44,8 @@ def grade(candidate):\n-    return area_only(candidate)\n+    # weight equivalence first, then area; reject non-equivalent early\n+    return staged_reward(candidate, equiv_first=True)\n' },
-      stdout_tail:'gen_1 best reward 0.80 (mux4 60->24 cells, equivalent)\n'
+`--- gen_1/target_agent.py
++++ gen_2/target_agent.py
+@@ -1,6 +1,16 @@
++Generation 2 improvements over Gen 1:
++1. MAX_TOKENS increased from 2048 to 16384 — kimi-k2p7-code is a reasoning model
++   that emits 3,000–8,000 tokens of chain-of-thought before the Verilog block.
++   2048 cut off ALL candidates mid-reasoning (no_module — zero code produced).
++2. Removed \`compiled\` guard from repair loop — every non-equivalent candidate
++   now gets a repair attempt (was silently skipping no_module / compile_error).
++4. Extract module before grading — pass clean Verilog, not reasoning prose.
++5. Adaptive hill climbing — refine the current best instead of restarting.
+@@ -64,7 +82,7 @@ # Tunable knobs
+-MAX_TOKENS     = int(os.environ.get("COLOGIC_MAX_TOKENS",     "2048"))
++MAX_TOKENS     = int(os.environ.get("COLOGIC_MAX_TOKENS",    "16384"))
+@@ -186,9 +305,12 @@ for i in range(N_CANDIDATES):
+-        while (rounds < MAX_REPAIR_ROUNDS
+-               and r.info.get("compiled")
+-               and not r.info.get("equivalent")):
++        cand = extract_module(raw, task.top_module) or raw
++        while rounds < MAX_REPAIR_ROUNDS and not r.info.get("equivalent"):
+` },
+      stdout_tail:'gen_1 best reward 0.500 (tt_um_tpu 1460 cells, no equivalent shrink)\ngen_2 best reward 0.847 (tt_um_tpu 1460->447 cells, -69.4%, equivalent)\n'
     };
   }
 
