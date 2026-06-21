@@ -34,7 +34,7 @@ export function Benchmark() {
       </h2>
       <p className="text-foreground/70 max-w-prose mb-8">
         Same held-out tasks, graded by Verilator against golden testbenches. The Cologic-trained
-        model beats the base model on pass@1 — measured, not claimed.
+        model beats the base model on pass@1, measured, not claimed.
       </p>
 
       <div className="flex flex-wrap gap-4 mb-8">

@@ -91,7 +91,7 @@ export function Foundry() {
         Agents on the array
       </h2>
       <p className="text-foreground/70 max-w-prose mb-8">
-        PLAN, FORGE and PROVE walk the 8×8 processing-element array your RTL synthesizes into —
+        PLAN, FORGE and PROVE walk the 8×8 processing-element array your RTL synthesizes into,
         probing cells, rewriting logic, proving equivalence. Every gate they remove makes the
         silicon smaller.
       </p>

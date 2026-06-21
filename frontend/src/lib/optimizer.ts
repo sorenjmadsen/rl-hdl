@@ -8,7 +8,7 @@ export const DEFAULT_TOKEN = process.env.NEXT_PUBLIC_RLHDL_TOKEN ?? "";
 
 // A small default design so the demo runs with zero setup (a 4:1 mux).
 export const SAMPLE_NAME = "mux4.v";
-export const SAMPLE_RTL = `// mux4.v — 4:1 multiplexer, 8-bit data
+export const SAMPLE_RTL = `// mux4.v - 4:1 multiplexer, 8-bit data
 module mux4 (
   input  wire [7:0] a,
   input  wire [7:0] b,
