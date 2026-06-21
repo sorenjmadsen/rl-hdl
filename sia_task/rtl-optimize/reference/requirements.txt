@@ -1,0 +1,6 @@
+# Installed into the SIA target-agent venv each generation.
+openai>=1.0
+# cologic (this repo) must also be importable for the agent + evaluate.py:
+#   the grader (cologic.grader), Task builder (cologic.upload), schema, extract.
+# It is not on PyPI; the Modal `sia run` wrapper installs it (pip install -e <repo>)
+# into the venv. For a local run: `uv pip install -e .` from the repo root first.

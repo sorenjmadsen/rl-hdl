@@ -1,0 +1,7 @@
+{
+  "profile_id": "claude-meta",
+  "name": "Cologic meta/feedback on Claude (Agent SDK)",
+  "agent_impl": "claude",
+  "model": "sonnet",
+  "provider_id": "anthropic"
+}

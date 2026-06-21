@@ -1,14 +1,48 @@
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
 # Python
 __pycache__/
 *.py[cod]
-.venv/
 *.egg-info/
+.venv/
 .pytest_cache/
 
-# Verilator / build artifacts
-obj_dir/
+# Build output
+dist/
+build/
+
+# OS / editor
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# HDL / sim / build artifacts
 *.vcd
+*.vvp
+*.out
+obj_dir/
+work/
 rlhdl_*/
 
 # generated eval output
 baseline.json
+records.jsonl
+*.jsonl
+!fireworks_rft/dataset.jsonl
+
+# vendored datasets (raw clone) — root-anchored so task dirs (e.g. sia_task/.../data) aren't swallowed
+/data/
+*_selftest.json
+ve_*.json
+
+# gstack
+.gstack/

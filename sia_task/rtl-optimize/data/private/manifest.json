@@ -1,0 +1,10 @@
+{
+  "designs": [
+    {
+      "id": "share_add",
+      "file": "designs/share_add.v",
+      "n_vectors": 256,
+      "seed": 1
+    }
+  ]
+}

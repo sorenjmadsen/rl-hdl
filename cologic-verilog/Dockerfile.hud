@@ -1,0 +1,73 @@
+# syntax=docker/dockerfile:1
+FROM python:3.12-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV LANG=en_US.UTF-8
+ENV LC_CTYPE=en_US.UTF-8
+# Image layout (see env.py): agent works in /workdir; hidden answer key at /donotaccess.
+ENV WORKSPACE_ROOT=/workdir
+ENV HIDDEN_ROOT=/donotaccess
+
+# EDA toolchain + git (clones SymbiYosys below) + util-linux (setpriv, for the uid wall).
+# NOTE: bubblewrap is intentionally NOT installed: it needs unprivileged user namespaces
+# that containers don't grant, so the v6 Workspace would wrap every command in a failing
+# bwrap call. The agent shell is instead uid-dropped to `agent` via setpriv (env.py).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        git \
+        locales \
+        util-linux \
+        verilator \
+        yosys \
+        z3 && \
+    sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen && \
+    rm -rf /var/lib/apt/lists/*
+
+# SymbiYosys (formal track): sby from the yosys-0.47 branch, run against the apt yosys 0.52
+# installed above. The read_ilang->read_rtlil sed bridges the yosys API rename across that gap.
+RUN git clone --depth 1 --branch yosys-0.47 https://github.com/YosysHQ/sby /tmp/sby && \
+    make -C /tmp/sby install PREFIX=/usr/local && \
+    sed -i 's/read_ilang/read_rtlil/g' /usr/local/share/yosys/python3/sby_core.py && \
+    rm -rf /tmp/sby
+
+RUN groupadd -g 1000 agent && \
+    useradd -u 1000 -g agent -s /bin/bash -m -d /home/agent agent
+
+# Env package + tasks live in /donotaccess (root:700): the root serving process imports
+# them; the uid-dropped agent shell cannot read them.
+WORKDIR /donotaccess
+COPY pyproject.toml env.py tasks.py task_catalog.py grader.py scenario_helpers.py /donotaccess/
+COPY tasks/ /donotaccess/tasks/
+
+# Install the env (pulls the hud v6 SDK + cocotb/pyuvm/etc.), then bake each task's
+# pristine baseline (agent-facing files, minus calibration helpers) into
+# /donotaccess/<id>/baseline and stash its hidden assets at /donotaccess/<id>/.
+RUN pip install --no-cache-dir -e /donotaccess && \
+    mkdir -p /workdir && \
+    for task_dir in /donotaccess/tasks/*; do \
+      task_id="$(basename "$task_dir")"; \
+      mkdir -p "/donotaccess/$task_id/baseline"; \
+      if [ -d "$task_dir/donotaccess" ]; then \
+        cp -a "$task_dir/donotaccess/." "/donotaccess/$task_id/"; \
+      fi; \
+      for item in Makefile filelist.f prompt.md rtl dv synth scripts formal vendor; do \
+        if [ -e "$task_dir/$item" ]; then \
+          cp -a "$task_dir/$item" "/donotaccess/$task_id/baseline/"; \
+        fi; \
+      done; \
+      rm -f "/donotaccess/$task_id/baseline/scripts/check_calibration.py"; \
+      find "/donotaccess/$task_id/baseline" -type d -name "__pycache__" -prune -exec rm -rf {} +; \
+    done && \
+    chown -R agent:agent /workdir && \
+    chmod -R 755 /workdir && \
+    chown -R root:root /donotaccess && \
+    chmod -R go-rwx /donotaccess
+
+# Serve the v6 tcp control channel as ROOT (so the grader can read /donotaccess); the
+# agent's shell is demoted to uid 1000 by env.py's _AgentWorkspace.
+EXPOSE 8765
+CMD ["python3", "-m", "hud", "serve", "env:env", "--host", "0.0.0.0", "--port", "8765"]

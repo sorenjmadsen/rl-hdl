@@ -1,0 +1,25 @@
+{
+  "job_id": "h8q9sbpg",
+  "name": "accounts/sorenmadsen/reinforcementFineTuningJobs/h8q9sbpg",
+  "state": "JOB_STATE_COMPLETED",
+  "base_model": "accounts/fireworks/models/qwen3-0p6b",
+  "output_model": "accounts/sorenmadsen/models/cologic-qwen3-rtl-rft-0621b",
+  "dataset": "accounts/sorenmadsen/datasets/test-cologic-reward-test-cologic-verilog-dataset-20260621025523",
+  "evaluator": "accounts/sorenmadsen/evaluators/test-cologic-reward-test-cologic-verilog-reward",
+  "dashboard": "https://app.fireworks.ai/dashboard/fine-tuning/reinforcement/h8q9sbpg",
+  "completed_time": "2026-06-21T03:06:22.323088Z",
+  "rollout_evaluations": 128,
+  "metrics": {
+    "average_score": 0.048498531250000004,
+    "compiled_average": 0.0625,
+    "matched_fraction_average": 0.0230712890625
+  },
+  "inference_probe": {
+    "accounts/fireworks/models/qwen3-0p6b": "404 Model not found, inaccessible, and/or not deployed",
+    "accounts/sorenmadsen/models/cologic-qwen3-rtl-rft-0621b": "404 Model not found, inaccessible, and/or not deployed"
+  },
+  "notes": [
+    "Training completed and produced a Fireworks model artifact.",
+    "Standalone base-vs-RFT evaluation through modal_app.py is blocked until the base and output model are callable through the account's inference endpoint or deployed separately."
+  ]
+}

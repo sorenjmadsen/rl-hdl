@@ -1,0 +1,44 @@
+{
+  "mean_reward": 0.640393,
+  "mean_area_improvement": 0.280786,
+  "n_equivalent": 4,
+  "n_total": 4,
+  "designs": [
+    {
+      "id": "mul8",
+      "reward": 0.516393,
+      "stage": "graded",
+      "equivalent": true,
+      "ref_cells": 366,
+      "cand_cells": 354,
+      "area_improvement": 0.032787
+    },
+    {
+      "id": "mux4",
+      "reward": 0.8,
+      "stage": "graded",
+      "equivalent": true,
+      "ref_cells": 60,
+      "cand_cells": 24,
+      "area_improvement": 0.6
+    },
+    {
+      "id": "popcount8",
+      "reward": 0.5,
+      "stage": "graded",
+      "equivalent": true,
+      "ref_cells": 27,
+      "cand_cells": 27,
+      "area_improvement": 0.0
+    },
+    {
+      "id": "share_mul",
+      "reward": 0.745179,
+      "stage": "graded",
+      "equivalent": true,
+      "ref_cells": 726,
+      "cand_cells": 370,
+      "area_improvement": 0.490358
+    }
+  ]
+}

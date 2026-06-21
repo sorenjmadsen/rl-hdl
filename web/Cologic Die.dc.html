@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#070b08}
+  body{font-feature-settings:"ss01","cv11";-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#1c2a20;border-radius:4px}
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:radial-gradient(ellipse 90% 60% at 50% 0%,#0c1610 0%,#070b08 60%);font-family:Inter,system-ui,sans-serif;color:#cbe3c2;padding:22px 26px 60px">
+  <div style="max-width:1060px;margin:0 auto">
+
+    <!-- HEADER -->
+    <div style="display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid #1c2a20;margin-bottom:18px">
+      <div style="width:32px;height:32px;border-radius:6px;background:linear-gradient(135deg,#3FA34D,#2c7a37);display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:21px;color:#06210c;font-weight:700">C</div>
+      <div style="flex:1">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:15px;color:#eafbe4;font-weight:600">Cologic · die view</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#647A5E;letter-spacing:.04em">streaming multiprocessor · SM90 (Hopper-class) · structural diagram</div>
+      </div>
+      <a href="/" style="text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:12px;color:#5BC24A;border:1px solid rgba(91,194,74,.4);border-radius:6px;padding:7px 13px">← foundry</a>
+    </div>
+
+    <!-- READOUT -->
+    <div style="display:flex;gap:14px;align-items:flex-start;background:#0b140d;border:1px solid #1c2a20;border-radius:8px;padding:13px 16px;margin-bottom:14px">
+      <div style="width:10px;height:10px;border-radius:2px;background:{{ selColor }};margin-top:4px;flex:none"></div>
+      <div style="flex:1">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:14px;color:#eafbe4;font-weight:600">{{ selName }}</div>
+        <div style="font-size:12.5px;color:#8aa082;line-height:1.5;margin-top:2px">{{ selDesc }}</div>
+      </div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#4a5a44;text-transform:uppercase;letter-spacing:.1em;flex:none;padding-top:3px">click a block</div>
+    </div>
+
+    <!-- LEGEND -->
+    <div style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:16px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#8aa082">
+      <sc-for list="{{ legend }}" as="l" hint-placeholder-count="5">
+        <span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:2px;background:{{ l.c }};border:1px solid {{ l.b }}"></span>{{ l.t }}</span>
+      </sc-for>
+    </div>
+
+    <!-- SM DIAGRAM -->
+    <div style="background:#0a0f0a;border:1px solid #294a30;border-radius:8px;padding:14px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7BE05A;font-weight:600;margin-bottom:10px;letter-spacing:.06em">SM</div>
+
+      <!-- L1 Instruction Cache -->
+      <div onClick="{{ onL1I }}" style="cursor:pointer;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#5fcdd6;background:#0e2c33;border:1px solid #2f6b78;border-radius:3px;padding:8px;margin-bottom:8px" style-hover="border-color:#5fcdd6">L1 Instruction Cache</div>
+
+      <!-- quadrants -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <sc-for list="{{ quads }}" as="q" hint-placeholder-count="4">
+          <div style="background:#0b120c;border:1px solid #1c2a20;border-radius:4px;padding:7px;display:flex;flex-direction:column;gap:4px">
+            <div onClick="{{ onL0 }}" style="cursor:pointer;text-align:center;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#5fcdd6;background:#0e2c33;border:1px solid #2f6b78;border-radius:2px;padding:4px" style-hover="border-color:#5fcdd6">L0 Instruction Cache</div>
+            <div onClick="{{ onWarp }}" style="cursor:pointer;text-align:center;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#e6c84a;background:#322b0c;border:1px solid #8a7a1f;border-radius:2px;padding:4px" style-hover="border-color:#e6c84a">Warp Scheduler (32 thread/clk)</div>
+            <div onClick="{{ onDispatch }}" style="cursor:pointer;text-align:center;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#e6c84a;background:#2a2409;border:1px solid #6e6118;border-radius:2px;padding:4px" style-hover="border-color:#e6c84a">Dispatch Unit (32 thread/clk)</div>
+            <div onClick="{{ onReg }}" style="cursor:pointer;text-align:center;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#6fb6d8;background:#0e2734;border:1px solid #2c6078;border-radius:2px;padding:4px" style-hover="border-color:#6fb6d8">Register File (16,384 × 32-bit)</div>
+            <!-- compute -->
+            <div style="display:flex;gap:4px">
+              <div onClick="{{ onCores }}" style="cursor:pointer;flex:1;display:flex;gap:2px;background:#0d160f;border:1px solid #1c2a20;border-radius:2px;padding:3px" style-hover="border-color:#3FA34D">
+                <sc-for list="{{ coreCols }}" as="col" hint-placeholder-count="4">
+                  <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+                    <sc-for list="{{ rowsArr }}" as="r" hint-placeholder-count="8">
+                      <div style="font-family:'JetBrains Mono',monospace;font-size:6px;text-align:center;color:{{ col.fg }};background:{{ col.bg }};border-radius:1px;padding:1.5px 0;letter-spacing:.02em">{{ col.lab }}</div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+              <div onClick="{{ onTensor }}" style="cursor:pointer;width:78px;flex:none;display:flex;align-items:center;justify-content:center;text-align:center;font-family:'JetBrains Mono',monospace;font-size:8px;color:#e08ac0;background:#341228;border:1px solid #8a3d6b;border-radius:2px;line-height:1.4" style-hover="border-color:#e08ac0">TENSOR CORE<br>4TH GEN</div>
+            </div>
+            <!-- footer -->
+            <div style="display:flex;gap:2px">
+              <sc-for list="{{ ldst }}" as="x" hint-placeholder-count="8">
+                <div onClick="{{ onLDST }}" style="cursor:pointer;flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:6.5px;color:#7BE05A;background:#173a1d;border:1px solid #2f7a3a;border-radius:1px;padding:3px 0">LD/ST</div>
+              </sc-for>
+              <div onClick="{{ onSFU }}" style="cursor:pointer;width:48px;flex:none;text-align:center;font-family:'JetBrains Mono',monospace;font-size:7px;color:#e08ac0;background:#341228;border:1px solid #8a3d6b;border-radius:1px;padding:3px 0">SFU</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- footers -->
+      <div onClick="{{ onTMA }}" style="cursor:pointer;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:#7BE05A;background:#143019;border:1px solid #2f7a3a;border-radius:3px;padding:8px;margin-top:8px" style-hover="border-color:#7BE05A">Tensor Memory Accelerator</div>
+      <div onClick="{{ onL1D }}" style="cursor:pointer;text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:#6fb6d8;background:#0e2734;border:1px solid #2c6078;border-radius:3px;padding:8px;margin-top:6px" style-hover="border-color:#6fb6d8">256 KB L1 Data Cache / Shared Memory</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:6px">
+        <sc-for list="{{ texs }}" as="t" hint-placeholder-count="4">
+          <div onClick="{{ onTex }}" style="cursor:pointer;text-align:center;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#7BE05A;background:#173a1d;border:1px solid #2f7a3a;border-radius:3px;padding:6px" style-hover="border-color:#7BE05A">Tex</div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#4a5a44;line-height:1.6;margin-top:14px">structure after NVIDIA Hopper SM90 · GPU cores in <span style="color:#7BE05A">green</span>, tensor/special compute in <span style="color:#e08ac0">maroon</span>, scheduling in <span style="color:#e6c84a">orange</span>, memory in <span style="color:#6fb6d8">blue/teal</span> · this is how Cologic will render a real netlist, structure over texture</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1100,&quot;height&quot;:820}}">
+class Component extends DCLogic {
+  state = { sel:{ name:'Streaming Multiprocessor (SM)', desc:'A uniform compute core: four processing-block quadrants sharing an L1 instruction cache on top and an L1 data / shared-memory bank below. Click any block to inspect it.', color:'#3FA34D' } };
+
+  pick = (name, desc, color)=>()=> this.setState({ sel:{ name, desc, color } });
+
+  renderVals(){
+    const s=this.state;
+    return {
+      selName:s.sel.name, selDesc:s.sel.desc, selColor:s.sel.color,
+      quads:[0,1,2,3], rowsArr:[0,1,2,3,4,5,6,7], ldst:[0,1,2,3,4,5,6,7], texs:[0,1,2,3],
+      coreCols:[
+        { lab:'INT32', bg:'#193f1f', fg:'#7BE05A' },
+        { lab:'FP32',  bg:'#1d4a25', fg:'#8fe07a' },
+        { lab:'FP32',  bg:'#193f1f', fg:'#7BE05A' },
+        { lab:'FP64',  bg:'#234a47', fg:'#8fd6c8' },
+      ],
+      legend:[
+        { c:'#193f1f', b:'#2f7a3a', t:'compute (INT/FP cores)' },
+        { c:'#341228', b:'#8a3d6b', t:'tensor / special (TC · SFU)' },
+        { c:'#322b0c', b:'#8a7a1f', t:'scheduling (warp · dispatch)' },
+        { c:'#0e2734', b:'#2c6078', t:'memory (register · L1 · shared)' },
+        { c:'#0e2c33', b:'#2f6b78', t:'instruction cache' },
+      ],
+      onL1I:this.pick('L1 Instruction Cache','Per-SM cache of decoded instructions, shared by all four quadrants. Feeds each quadrant\u2019s L0 cache.','#5fcdd6'),
+      onL0:this.pick('L0 Instruction Cache','Quadrant-local instruction cache — lowest-latency feed to the warp scheduler.','#5fcdd6'),
+      onWarp:this.pick('Warp Scheduler','Issues one 32-thread warp per clock to this quadrant\u2019s execution units. Hides memory latency by switching warps every cycle.','#e6c84a'),
+      onDispatch:this.pick('Dispatch Unit','Routes the issued warp\u2019s instruction to the correct execution pipe (INT, FP, tensor, LD/ST).','#e6c84a'),
+      onReg:this.pick('Register File','16,384 × 32-bit registers per quadrant — operand storage for every in-flight thread. The widest, fastest memory on the SM.','#6fb6d8'),
+      onCores:this.pick('CUDA Cores','The compute grid: INT32, FP32 and FP64 lanes. One MAC per core per clock — this is where Cologic\u2019s systolic array maps.','#7BE05A'),
+      onTensor:this.pick('Tensor Core (4th gen)','Operates on whole matrix tiles per instruction (HMMA: D = A·B + C). The unit Cologic targets for tensor-matmul kernels.','#e08ac0'),
+      onLDST:this.pick('Load / Store Unit','Moves operands between the register file and L1/shared memory — one address per thread per clock.','#7BE05A'),
+      onSFU:this.pick('Special Function Unit','Transcendentals (sin, rsqrt, exp) and interpolation at reduced throughput.','#e08ac0'),
+      onTMA:this.pick('Tensor Memory Accelerator','Asynchronously bulk-copies large tiles between global and shared memory, freeing threads from address math.','#7BE05A'),
+      onL1D:this.pick('L1 Data Cache / Shared Memory','256 KB unified bank, split between hardware-managed L1 and program-managed shared memory.','#6fb6d8'),
+      onTex:this.pick('Texture Unit','Sampling / addressing hardware (Tex) — repurposed as read-only data cache in compute workloads.','#7BE05A'),
+    };
+  }
+}
+</script>
+</body>
+</html>

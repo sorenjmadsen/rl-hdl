@@ -1,0 +1,7 @@
+{
+  "provider_id": "fireworks",
+  "name": "Fireworks",
+  "client_kind": "openai",
+  "base_url": "https://api.fireworks.ai/inference/v1",
+  "api_key_env": "FIREWORKS_API_KEY"
+}

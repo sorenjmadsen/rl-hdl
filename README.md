@@ -8,6 +8,8 @@ computes the right function or it doesn't, so the grade physically cannot be fak
 See [docs/BRIEF.md](docs/BRIEF.md) for the full project brief, scope, and the
 locked design decisions.
 
+For the hackathon presentation path, use [docs/demo_runbook.md](docs/demo_runbook.md).
+
 ## How grading works
 
 The reward seam both the verifier (CPU) and trainer (GPU) build against:
@@ -40,7 +42,7 @@ just reseed the random vectors.
 
 ## Tasks
 
-`rl_hdl/tasks.py` ships training tasks, held-out tasks, and converted
+`cologic/tasks.py` ships training tasks, held-out tasks, and converted
 verified-gradient tasks:
 
 - **`TRAIN_TASKS`**: mux2, mux4, add4, cmp8, alu8, dec3to8, popcount8, shl8,
@@ -49,10 +51,9 @@ verified-gradient tasks:
   and modules, recombined functions, and an inverse (gray→bin). These give
   the **headline** metric: warm-start models may have seen public benchmarks, so
   the gain is measured on structurally novel tasks.
-- **`GRADIENT_TASKS`**: clocked TPU-like matrix-multiply tasks distilled
-  from real verified gradients in `YashKarthik/tpu`. One checks that repeated
-  matrix multiplies do not reuse stale accumulator state; the other checks signed
-  matrix elements and output-select control.
+- **`GRADIENT_TASKS`**: tasks distilled from real verified gradients in
+  accelerator repos. They cover repeated TPU matrix multiply, signed output
+  selection, and an NPU MAC-path integer-to-FP32 conversion bug.
 
 The repo also includes a documented seed mining corpus in
 `data/verified_gradients.jsonl`, with reproducible provenance for real-repo RTL
@@ -94,15 +95,54 @@ modal run modal_app.py::bench --total 256
 (`::main` is required because the app has multiple entrypoints — Modal won't
 auto-pick one.)
 
-Output is a per-task table (`pass`, `mean_reward`), an aggregate `pass@1`, and a
-`baseline.json`. `mean_reward` is the dense signal — watch it move before
-`pass@1` does. The same `evaluate()` runs in-process via `rl_hdl.eval` for quick
-local iteration without Modal.
+Output is a per-task table (`pass`, `mean_reward`), an aggregate `pass@1`, a
+`finish_reason` breakdown, and a `baseline.json`. `mean_reward` is the dense
+signal — watch it move before `pass@1` does. The same `aggregate()` runs
+in-process via `cologic.eval` for quick local iteration without Modal.
+
+Add `--dump records.jsonl` to write a per-sample record (`task_id`,
+`finish_reason`, `reward`, `stage`, `completion`) for diagnosis.
+
+**Truncation note:** reasoning-heavy models can spend the whole token budget
+before emitting the module, which extracts to nothing and grades `0.0`
+(`finish_reason == "length"`). The default is `max_tokens=4096`; raise it with
+`RLHDL_MAX_TOKENS=8192` for the worst cases. (On one deployment this lifted
+held-out pass@1 from 0.567 at 1024 to 0.933 at 4096.)
+
+## Fireworks RFT training
+
+The inference loop can improve one design within a session; Fireworks RFT is the
+weight-update path that trains the policy across sessions. The evaluator template
+in `fireworks_rft/` wraps the same reward seam in Eval Protocol:
+
+```python
+grade(completion: str, task: Task) -> GradeResult
+```
+
+Modal assembles the evaluator, copies `cologic/`, smoke-tests the reward function
+against golden RTL, then submits the Fireworks RFT job using the Modal secret
+`fireworks-api`.
+
+```bash
+# Smoke-test and show the planned Fireworks call without launching training
+modal run scripts/modal_fireworks_rft.py::launch --dry-run
+
+# Launch a small supported RFT job that updates model weights
+modal run scripts/modal_fireworks_rft.py::launch \
+  --base-model accounts/fireworks/models/qwen3-0p6b \
+  --account <fireworks-account> \
+  --output-model cologic-qwen3-rtl-rft
+```
+
+Defaults are intentionally small (`epochs=1`, `batch-size-samples=2`,
+`max-concurrent-rollouts=4`) so the job is hackathon-pragmatic. Override
+`--base-model`, `--output-model`, `--max-rows`, and the training flags from the
+CLI when sweeping larger corpora.
 
 ## Layout
 
 ```
-rl_hdl/
+cologic/
   schema.py     # Task + GradeResult (the locked seam)
   extract.py    # robust Verilog module extraction from LLM output
   verifier.py   # grade() — Verilator-grounded dense reward
@@ -110,7 +150,11 @@ rl_hdl/
   prompt.py     # Task -> chat messages for the policy model
   inference.py  # Fireworks (OpenAI-compatible) sampling
   eval.py       # pass@1 / mean-reward aggregation (grader-agnostic)
+  rft.py        # Eval Protocol JSONL rows for Fireworks RFT
 modal_app.py    # Modal image (Verilator) + parallel grader + baseline entrypoint
+fireworks_rft/   # Fireworks RFT evaluator template
+scripts/modal_fireworks_rft.py # Modal launcher for weight-update training
+agents/         # Plan/Forge/Prove self-improvement loop on cologic (see agents/README.md)
 tests/
   test_verifier.py
   test_eval.py
@@ -126,6 +170,9 @@ Requires [Verilator](https://verilator.org) on `PATH` (`brew install verilator`)
 uv venv
 uv pip install -e ".[dev]"
 uv run pytest -q
+
+# Optional training launcher deps
+uv pip install -e ".[train]"
 ```
 
 For a quick local proof that the converted TPU gradients give dense,
@@ -134,3 +181,31 @@ Verilator-grounded rewards:
 ```bash
 uv run python scripts/demo_verified_tasks.py
 ```
+## Decision records
+
+### ADR-001: consolidate the backend into `cologic/`
+
+**Status:** accepted (PR #3). **Date:** 2026-06-20.
+
+**Context.** Two reward engines had grown in parallel: `rl_hdl/` (Verilator,
+candidate-vs-golden-reference dense reward, plus task library, Fireworks inference,
+Modal parallel grader) and an earlier `cologic/` (iverilog + VCD toggle/power
+proxies, a CLI demo over `examples/systolic_array/`). "Cologic" is the product name
+(the `web/` visualizer + the `agents/` loop); having it also name a second, weaker
+engine was confusing.
+
+**Decision.**
+- The Verilator engine (`rl_hdl/`) is canonical and is **renamed to the `cologic/`
+  package** — one backend, named after the product.
+- The old iverilog/VCD engine, its `tests/test_reward.py`, and the
+  `examples/systolic_array/` demo are **removed**. Verilator + golden references are
+  the non-lying oracle; the iverilog path was redundant.
+- The Exa search spike (`search.mjs`, root `package.json`/`package-lock.json`, the
+  `exa-js` dep) is **removed** — scaffolding unrelated to the backend.
+
+**Consequences.**
+- Imports are `cologic.*` (was `rl_hdl.*`); the wheel ships `packages = ["cologic"]`.
+  The distribution name stays `rl-hdl` (the repo) and the Modal app stays `rl-hdl`.
+- **Dropped (revisit when needed):** the VCD-based **power/timing proxies** only the
+  old engine had. Re-add as real metrics on top of synthesis (yosys+sky130 for power,
+  OpenSTA for timing) rather than as toggle counts.

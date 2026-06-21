@@ -1,0 +1,28 @@
+{
+  "designs": [
+    {
+      "id": "mul8",
+      "file": "designs/mul8.v",
+      "n_vectors": 256,
+      "seed": 1
+    },
+    {
+      "id": "mux4",
+      "file": "designs/mux4.v",
+      "n_vectors": 256,
+      "seed": 1
+    },
+    {
+      "id": "popcount8",
+      "file": "designs/popcount8.v",
+      "n_vectors": 256,
+      "seed": 1
+    },
+    {
+      "id": "share_mul",
+      "file": "designs/share_mul.v",
+      "n_vectors": 256,
+      "seed": 1
+    }
+  ]
+}

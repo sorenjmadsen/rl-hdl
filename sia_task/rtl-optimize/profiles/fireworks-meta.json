@@ -1,0 +1,7 @@
+{
+  "profile_id": "fireworks-meta",
+  "name": "Cologic meta/feedback on Fireworks (OpenHands)",
+  "agent_impl": "openhands",
+  "model": "accounts/fireworks/models/minimax-m3",
+  "provider_id": "fireworks"
+}

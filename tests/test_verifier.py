@@ -6,9 +6,10 @@ import shutil
 
 import pytest
 
-from rl_hdl import grade
-from rl_hdl.tasks import BY_ID, SEED_TASKS
-from rl_hdl.verifier import COMPILE_ERROR_REWARD, COMPILE_FLOOR
+from cologic import grade
+from cologic.schema import Port, Task
+from cologic.tasks import BY_ID, SEED_TASKS
+from cologic.verifier import COMPILE_ERROR_REWARD, COMPILE_FLOOR
 
 pytestmark = pytest.mark.skipif(shutil.which("verilator") is None, reason="verilator not installed")
 
@@ -65,6 +66,20 @@ endmodule"""
     r = grade(broken, MUX)
     assert r.info["stage"] == "compile_error"
     assert r.reward == COMPILE_ERROR_REWARD
+
+
+def test_port_named_like_tb_internal_var():
+    # A DUT port named `i` must not collide with the testbench loop counter.
+    task = Task(
+        task_id="passthru_i",
+        spec="pass input i to output o",
+        top_module="passthru_i",
+        interface=[Port("i", "input", 4), Port("o", "output", 4)],
+        reference_rtl="module passthru_i(input [3:0] i, output [3:0] o); assign o = i; endmodule",
+    )
+    good = "module passthru_i(input [3:0] i, output [3:0] o); assign o = i; endmodule"
+    r = grade(good, task)
+    assert r.info["stage"] == "graded" and r.reward == pytest.approx(1.0)
 
 
 def test_no_module_scores_zero():
@@ -201,6 +216,19 @@ module tt_um_tpu (
 endmodule
 """
     r = grade(collapsed_output_select, task, timeout=90.0)
+    assert r.info["stage"] == "graded", r.info.get("log", "")[:400]
+    assert COMPILE_FLOOR <= r.reward < 1.0
+    assert r.info["passed"] < r.info["total"]
+
+
+def test_npu_int34_to_fp32_catches_trivial_constant_converter():
+    task = BY_ID["vg_npu_int34_to_fp32"]
+    constant_one = """
+module npu_int34_to_fp32(input [33:0] int34, output [31:0] fp32);
+  assign fp32 = int34[33] ? 32'hbf800000 : 32'h3f800000;
+endmodule
+"""
+    r = grade(constant_one, task)
     assert r.info["stage"] == "graded", r.info.get("log", "")[:400]
     assert COMPILE_FLOOR <= r.reward < 1.0
     assert r.info["passed"] < r.info["total"]
