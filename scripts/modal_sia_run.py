@@ -10,8 +10,16 @@ Everything runs in one container that has the toolchain (so the agent + evaluate
 can grade locally) and the repo (so SIA's per-generation venv installs `cologic`
 editable).
 
-  modal run scripts/modal_sia_run.py::validate          # cheap: no LLM calls
-  modal run scripts/modal_sia_run.py::run --max-gen 2    # SPENDS (Fireworks)
+  modal run scripts/modal_sia_run.py::validate_entry    # cheap: no LLM calls
+  modal run scripts/modal_sia_run.py::seed              # harness+verifier, no meta-agent
+  modal run scripts/modal_sia_run.py::main --max-gen 2  # full SIA loop (SPENDS Fireworks)
+
+Live stage markers (streamed during a run):
+  [HARNESS]   the harness samples a rewrite / runs a repair / updates per generation
+  [SIM]       the harness triggers a simulation (deployed Verilator+Yosys verifier)
+  [FOOTPRINT] gate-count result so far (ref->cand cells, % smaller, reward)
+  [EVAL]      evaluate.py scoring the generation's submission
+  [WEIGHTS]   (future) reserved for the weight-update lever (RFT) progress
 """
 
 from __future__ import annotations
@@ -41,6 +49,11 @@ sia_image = (
 app = modal.App("rl-hdl-sia")
 
 TASK_DIR = f"{REPO}/sia_task/rtl-optimize"
+
+
+def _public_designs() -> list:
+    from pathlib import Path
+    return json.loads((Path(TASK_DIR) / "data/public/manifest.json").read_text())["designs"]
 
 
 @app.function(image=sia_image, timeout=300)
@@ -112,7 +125,19 @@ def sia_run_remote(
         "--meta-agent-profile", "fireworks-meta",
         "--target-agent-profile", "fireworks-target",
     ]
-    proc = subprocess.run(cmd, cwd=str(work), env=env, capture_output=True, text=True)
+    print(f"[SIA] launching {max_gen} generations on {len(_public_designs())} designs "
+          f"(target={target_model}, meta={meta_model})\n", flush=True)
+
+    # Stream live (stderr merged) so stages show up in `modal run` as they happen,
+    # rather than dumping at the end. SIA prints generation/agent transitions; our
+    # target agent + evaluate.py print [SIM]/[HARNESS]/[FOOTPRINT] markers.
+    proc = subprocess.Popen(cmd, cwd=str(work), env=env, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, text=True, bufsize=1)
+    lines: list[str] = []
+    for line in proc.stdout:
+        print(line, end="", flush=True)
+        lines.append(line)
+    rc = proc.wait()
 
     run_dir = work / "runs" / f"run_{run_id}"
     generations = []
@@ -124,12 +149,45 @@ def sia_run_remote(
                 "results": json.loads(rj.read_text()) if rj.exists() else None,
                 "has_target_agent": (gdir / "target_agent.py").exists(),
             })
-    return {
-        "returncode": proc.returncode,
-        "stdout_tail": proc.stdout[-6000:],
-        "stderr_tail": proc.stderr[-3000:],
-        "generations": generations,
-    }
+    return {"returncode": rc, "stdout_tail": "".join(lines)[-6000:], "generations": generations}
+
+
+@app.function(image=sia_image, secrets=[modal.Secret.from_name("fireworks-api")], timeout=1800, cpu=2.0)
+def seed_run_remote(target_model: str, n_candidates: int, temperature: float, max_repair: int) -> dict:
+    """Run the seed harness + evaluate directly (no meta-agent) to demo live stage
+    logging and validate the deployed-verifier grading path independent of SIA.
+    """
+    import os
+    import subprocess
+    from pathlib import Path
+
+    subprocess.run(["uv", "pip", "install", "--system", "-e", REPO], check=True, capture_output=True)
+    task = Path(TASK_DIR)
+    gen = Path("/root/seed_gen")
+    gen.mkdir(parents=True, exist_ok=True)
+
+    env = os.environ.copy()
+    env["COLOGIC_TARGET_MODEL"] = target_model
+    env["COLOGIC_N_CANDIDATES"] = str(n_candidates)
+    env["COLOGIC_TEMPERATURE"] = str(temperature)
+    env["COLOGIC_MAX_REPAIR"] = str(max_repair)
+
+    def _stream(cmd: list[str]) -> int:
+        p = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                             text=True, bufsize=1)
+        for line in p.stdout:
+            print(line, end="", flush=True)
+        return p.wait()
+
+    print("[SEED] running the seed harness (no meta-agent) on the public designs ...\n", flush=True)
+    agent_rc = _stream(["python", "-u", str(task / "reference/reference_target_agent.py"),
+                        "--dataset_dir", str(task / "data/public"), "--working_dir", str(gen)])
+    print("\n[SEED] scoring the submission with the immutable verifier ...\n", flush=True)
+    eval_rc = _stream(["python", "-u", str(task / "data/public/evaluate.py"), "--gen-dir", str(gen)])
+
+    rj = gen / "results.json"
+    return {"agent_rc": agent_rc, "eval_rc": eval_rc,
+            "results": json.loads(rj.read_text()) if rj.exists() else None}
 
 
 def _patch_profile(path, model: str) -> None:
@@ -153,6 +211,7 @@ def main(
     r = sia_run_remote.remote(max_gen, run_id, target_model, meta_model,
                               n_candidates, temperature, max_repair, meta_max_turns)
     print(f"\nsia run rc={r['returncode']}\n")
+    # Footprint across generations — "how the harness is improving the designs so far".
     print(f"{'generation':<10} {'mean_reward':>12} {'mean_area_impr':>15} {'equiv':>8}")
     print("-" * 50)
     for g in r["generations"]:
@@ -162,7 +221,30 @@ def main(
         eq = f"{res.get('n_equivalent', '?')}/{res.get('n_total', '?')}"
         print(f"{g['gen']:<10} {res.get('mean_reward', 0):>12.4f} {ai_s:>15} {eq:>8}")
     if r["returncode"] != 0:
-        print("\n--- stderr tail ---\n" + r["stderr_tail"])
+        print(f"\n[SIA] exited rc={r['returncode']} — output tail:\n" + r["stdout_tail"][-2000:])
+
+
+@app.local_entrypoint()
+def seed(
+    target_model: str = "accounts/fireworks/models/kimi-k2p7-code",
+    n_candidates: int = 2,
+    temperature: float = 0.9,
+    max_repair: int = 1,
+):
+    """Demo the harness + verifier + live stage logging WITHOUT the meta-agent.
+
+    Streams [HARNESS] (sampling/repair), [SIM] (verifier triggered), [FOOTPRINT]
+    (gate-count result), [EVAL]. Validates the deployed-grader path end to end.
+
+      modal run scripts/modal_sia_run.py::seed
+    """
+    r = seed_run_remote.remote(target_model, n_candidates, temperature, max_repair)
+    res = r["results"] or {}
+    print(f"\n[SEED] agent_rc={r['agent_rc']} eval_rc={r['eval_rc']}")
+    print(f"[FOOTPRINT] final: mean_area_improvement="
+          f"{res.get('mean_area_improvement', 0) * 100:+.1f}% "
+          f"equiv={res.get('n_equivalent', '?')}/{res.get('n_total', '?')} "
+          f"mean_reward={res.get('mean_reward', 0):.3f}")
 
 
 @app.local_entrypoint()

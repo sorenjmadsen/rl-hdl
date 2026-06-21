@@ -39,9 +39,24 @@ from cologic.upload import task_from_rtl
 _grader = modal.Function.from_name("rl-hdl", "grade_opt_remote")
 
 
-def grade(rtl: str, task) -> SimpleNamespace:
+def _log(tag: str, msg: str) -> None:
+    print(f"[{tag}] {msg}", flush=True)
+
+
+def grade(rtl: str, task, label: str = "") -> SimpleNamespace:
+    # A grade IS a simulation: the deployed verifier runs Verilator (equivalence)
+    # then Yosys (gate count). Log the trigger and the footprint it reports back.
+    _log("SIM", f"{task.task_id} {label}: verifying on Modal grader (Verilator + Yosys)")
     out = _grader.remote(rtl, task)  # {"reward", "info", "task_id"}
-    return SimpleNamespace(reward=out["reward"], info=out["info"])
+    r = SimpleNamespace(reward=out["reward"], info=out["info"])
+    i = r.info
+    cells = (f"{i.get('ref_cells')}->{i.get('cand_cells')}"
+             if i.get("cand_cells") is not None else "n/a")
+    ai = i.get("area_improvement")
+    ai_s = f" ({ai * 100:+.1f}%)" if ai is not None else ""
+    _log("FOOTPRINT", f"{task.task_id} {label}: equiv={i.get('equivalent')} "
+                      f"cells {cells}{ai_s} reward={r.reward:.3f}")
+    return r
 
 # ── Policy model (injected via env; defaults to the Cologic Fireworks deployment) ──
 MODEL = os.environ.get("COLOGIC_TARGET_MODEL", "accounts/fireworks/models/kimi-k2p7-code")
@@ -118,25 +133,33 @@ def _repair_msgs(task, candidate: str, info: dict) -> list[dict]:
 
 def optimize_one(task) -> tuple[str, dict, list[dict]]:
     """Return (best_rtl, best_info, candidate_log) for one design."""
+    _log("HARNESS", f"optimizing {task.task_id}: baseline + {N_CANDIDATES} rewrites "
+                    f"(temp={TEMPERATURE}, repair<= {MAX_REPAIR_ROUNDS})")
     best_rtl = task.reference_rtl
-    best = grade(best_rtl, task)
+    best = grade(best_rtl, task, "baseline")
     log = [{"origin": "baseline", "reward": best.reward, "stage": best.info.get("stage"),
             "equivalent": bool(best.info.get("equivalent"))}]
 
     for i in range(N_CANDIDATES):
         strategy = STRATEGIES[i % len(STRATEGIES)]
+        _log("HARNESS", f"{task.task_id}: sampling rewrite {i} — {strategy[:48]}...")
         cand = _chat(_rewrite_msgs(task, strategy))
-        r = grade(cand, task)
+        r = grade(cand, task, f"rewrite{i}")
         rounds = 0
         while rounds < MAX_REPAIR_ROUNDS and r.info.get("compiled") and not r.info.get("equivalent"):
-            cand = _chat(_repair_msgs(task, cand, r.info))
-            r = grade(cand, task)
             rounds += 1
+            _log("HARNESS", f"{task.task_id}: rewrite {i} broke equivalence — repair {rounds}")
+            cand = _chat(_repair_msgs(task, cand, r.info))
+            r = grade(cand, task, f"rewrite{i}+repair{rounds}")
         log.append({"origin": f"rewrite{i}", "reward": r.reward, "stage": r.info.get("stage"),
                     "equivalent": bool(r.info.get("equivalent"))})
         if r.reward > best.reward:
             best, best_rtl = r, cand
 
+    ai = best.info.get("area_improvement")
+    ai_s = f"{ai * 100:+.1f}%" if ai is not None else "n/a"
+    _log("RESULT", f"{task.task_id}: best equiv={best.info.get('equivalent')} "
+                   f"footprint={ai_s} reward={best.reward:.3f}")
     return best_rtl, best.info, log
 
 
