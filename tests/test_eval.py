@@ -6,9 +6,9 @@ import shutil
 
 import pytest
 
-from rl_hdl.eval import evaluate, local_grade_batch
-from rl_hdl.prompt import build_user_prompt
-from rl_hdl.tasks import BY_ID, HELDOUT_TASKS
+from cologic.eval import evaluate, local_grade_batch
+from cologic.prompt import build_user_prompt
+from cologic.tasks import BY_ID, HELDOUT_TASKS
 
 
 def test_prompt_includes_interface():

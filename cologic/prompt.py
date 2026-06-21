@@ -6,7 +6,7 @@ baseline and for RL rollouts, so the baseline number is honest.
 
 from __future__ import annotations
 
-from rl_hdl.schema import Task
+from cologic.schema import Task
 
 SYSTEM = (
     "You are an expert hardware engineer. You write correct, synthesizable Verilog. "

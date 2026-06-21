@@ -15,7 +15,7 @@ guard from the RL de-risking checklist).
 
 from __future__ import annotations
 
-from rl_hdl.schema import Port, Task
+from cologic.schema import Port, Task
 
 TRAIN_TASKS: list[Task] = [
     Task(

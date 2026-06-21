@@ -24,8 +24,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from rl_hdl.extract import extract_module, extract_modules, module_name, rename_module
-from rl_hdl.schema import GradeResult, Task
+from cologic.extract import extract_module, extract_modules, module_name, rename_module
+from cologic.schema import GradeResult, Task
 
 COMPILE_FLOOR = 0.10
 COMPILE_ERROR_REWARD = 0.05

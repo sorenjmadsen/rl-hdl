@@ -1,0 +1,22 @@
+build/
+reports/
+obj_dir/
+sim_build/
+*.vcd
+*.fst
+*.vvp
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+.DS_Store
+.claude/
+
+# Env / secrets
+.env
+.env.*
+
+# HUD local state (deploy link + eval scratch), account-specific
+.hud/
+.hud_eval.toml

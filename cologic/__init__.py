@@ -5,7 +5,7 @@ The reward seam both tracks build against:
     grade(completion: str, task: Task) -> GradeResult(reward: float, info: dict)
 """
 
-from rl_hdl.schema import GradeResult, Port, Task
-from rl_hdl.verifier import grade
+from cologic.schema import GradeResult, Port, Task
+from cologic.verifier import grade
 
 __all__ = ["Task", "Port", "GradeResult", "grade"]

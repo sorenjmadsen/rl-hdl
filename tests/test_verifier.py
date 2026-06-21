@@ -6,9 +6,9 @@ import shutil
 
 import pytest
 
-from rl_hdl import grade
-from rl_hdl.tasks import BY_ID, SEED_TASKS
-from rl_hdl.verifier import COMPILE_ERROR_REWARD, COMPILE_FLOOR
+from cologic import grade
+from cologic.tasks import BY_ID, SEED_TASKS
+from cologic.verifier import COMPILE_ERROR_REWARD, COMPILE_FLOOR
 
 pytestmark = pytest.mark.skipif(shutil.which("verilator") is None, reason="verilator not installed")
 

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#FAF8F4}
+  body{font-feature-settings:"ss01","cv11";-webkit-font-smoothing:antialiased}
+  @media print{ body{background:#fff} .noprint{display:none} }
+</style>
+</helmet>
+
+<div style="min-height:100vh;background:#FAF8F4;font-family:Inter,system-ui,sans-serif;color:#1C1917;padding:0 24px 80px">
+  <div style="max-width:860px;margin:0 auto">
+
+    <!-- HEADER -->
+    <div style="display:flex;align-items:center;gap:13px;padding:26px 0 20px;border-bottom:1px solid #E2DCCB">
+      <div style="width:36px;height:36px;border-radius:7px;background:linear-gradient(135deg,#3FA34D,#2c7a37);display:flex;align-items:center;justify-content:center;font-family:'Instrument Serif',serif;font-size:23px;color:#06210c;font-weight:700">C</div>
+      <div style="flex:1">
+        <div style="font-family:'Instrument Serif',serif;font-size:25px;line-height:1.05">Cologic on <span style="font-style:italic">ho-bench</span></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#78716C;margin-top:3px">RTL synthesis · pass@1 · n=5 samples/task</div>
+      </div>
+      <div style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A8A29E;line-height:1.5">RLVR · epoch 8<br>greedy decode, T=0.2</div>
+    </div>
+
+    <!-- HEADLINE STATS -->
+    <div style="display:flex;gap:14px;padding:24px 0 8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:170px;background:#fff;border:1px solid #E2DCCB;border-radius:8px;padding:16px 18px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#78716C;margin-bottom:8px">Gemma · baseline</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:700;color:#78716C;line-height:1">0.567</div>
+        <div style="font-size:11.5px;color:#A8A29E;margin-top:4px">pass@1 · below gate</div>
+      </div>
+      <div style="flex:1;min-width:170px;background:#fff;border:1px solid #3FA34D;border-radius:8px;padding:16px 18px;box-shadow:0 1px 0 rgba(63,163,77,.08)">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#2c7a37;margin-bottom:8px">Cologic · RLVR</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:700;color:#3FA34D;line-height:1">0.667</div>
+        <div style="font-size:11.5px;color:#2c7a37;margin-top:4px">pass@1 · clears gate ✓</div>
+      </div>
+      <div style="flex:1;min-width:170px;background:#06210c;border:1px solid #06210c;border-radius:8px;padding:16px 18px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#8fcf98;margin-bottom:8px">improvement</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:700;color:#7BE05A;line-height:1">+17.6%</div>
+        <div style="font-size:11.5px;color:#8fcf98;margin-top:4px">+10.0 pts · 3/6 tasks lifted</div>
+      </div>
+    </div>
+
+    <!-- FIGURE 1 -->
+    <div style="margin-top:30px;background:#fff;border:1px solid #E2DCCB;border-radius:10px;padding:20px 22px 16px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:14px;font-weight:600">Per-task functional correctness</div>
+        <div style="display:flex;gap:16px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#57534E">
+          <span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:2px;background:#C9C0A8"></span>Gemma</span>
+          <span style="display:flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:2px;background:#3FA34D"></span>Cologic</span>
+        </div>
+      </div>
+      <svg viewBox="0 0 760 320" style="width:100%;height:auto;display:block;font-family:'JetBrains Mono',monospace">
+        <sc-for list="{{ grid }}" as="g" hint-placeholder-count="5">
+          <line x1="50" y1="{{ g.y }}" x2="740" y2="{{ g.y }}" stroke="#EDE8DA" stroke-width="1"></line>
+          <text x="40" y="{{ g.ty }}" text-anchor="end" font-size="11" fill="#A8A29E">{{ g.label }}</text>
+        </sc-for>
+        <line x1="50" y1="{{ thrY }}" x2="740" y2="{{ thrY }}" stroke="#B45309" stroke-width="1.4" stroke-dasharray="5 4"></line>
+        <text x="740" y="{{ thrLabelY }}" text-anchor="end" font-size="10.5" fill="#B45309" font-weight="600">deployment gate · 0.60</text>
+        <sc-for list="{{ bars }}" as="b" hint-placeholder-count="12">
+          <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" rx="1.5" fill="{{ b.fill }}"></rect>
+          <text x="{{ b.cx }}" y="{{ b.labelY }}" text-anchor="middle" font-size="10" fill="{{ b.labelFill }}" font-weight="600">{{ b.label }}</text>
+        </sc-for>
+        <sc-for list="{{ whiskers }}" as="w" hint-placeholder-count="6">
+          <line x1="{{ w.x }}" y1="{{ w.top }}" x2="{{ w.x }}" y2="{{ w.bot }}" stroke="#8a8073" stroke-width="1"></line>
+          <line x1="{{ w.x1 }}" y1="{{ w.top }}" x2="{{ w.x2 }}" y2="{{ w.top }}" stroke="#8a8073" stroke-width="1"></line>
+          <line x1="{{ w.x1 }}" y1="{{ w.bot }}" x2="{{ w.x2 }}" y2="{{ w.bot }}" stroke="#8a8073" stroke-width="1"></line>
+        </sc-for>
+        <sc-for list="{{ xLabels }}" as="x" hint-placeholder-count="6">
+          <text x="{{ x.x }}" y="288" text-anchor="middle" font-size="11" fill="#57534E">{{ x.text }}</text>
+          <text x="{{ x.x }}" y="303" text-anchor="middle" font-size="9.5" fill="#A8A29E">{{ x.sub }}</text>
+        </sc-for>
+        <line x1="50" y1="260" x2="740" y2="260" stroke="#C9C0A8" stroke-width="1.2"></line>
+      </svg>
+      <div style="font-size:11.5px;color:#78716C;line-height:1.55;margin-top:8px;padding-top:10px;border-top:1px solid #EDE8DA">
+        <span style="font-weight:600;color:#44403C;font-family:'JetBrains Mono',monospace">Fig. 1.</span> Mean reward (fraction of n=5 samples compiling &amp; passing the reference testbench) per ho-bench task. Whiskers: ±1 s.e. Cologic concentrates its gains on the three tasks Gemma fails — <span style="font-family:'JetBrains Mono',monospace">popcount16</span>, <span style="font-family:'JetBrains Mono',monospace">dec2to4</span>, <span style="font-family:'JetBrains Mono',monospace">gray2bin8</span> — while holding the saturated tasks at ceiling.
+      </div>
+    </div>
+
+    <!-- FIGURE 2 -->
+    <div style="margin-top:18px;background:#fff;border:1px solid #E2DCCB;border-radius:10px;padding:20px 22px 16px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:14px;font-weight:600">pass@1 across RLVR epochs</div>
+        <div style="display:flex;gap:16px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#57534E">
+          <span style="display:flex;align-items:center;gap:6px"><svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="#A8A29E" stroke-width="2" stroke-dasharray="3 2"/></svg>Gemma</span>
+          <span style="display:flex;align-items:center;gap:6px"><svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="#3FA34D" stroke-width="2.5"/></svg>Cologic</span>
+        </div>
+      </div>
+      <svg viewBox="0 0 760 230" style="width:100%;height:auto;display:block;font-family:'JetBrains Mono',monospace">
+        <sc-for list="{{ grid2 }}" as="g" hint-placeholder-count="5">
+          <line x1="50" y1="{{ g.y }}" x2="740" y2="{{ g.y }}" stroke="#EDE8DA" stroke-width="1"></line>
+          <text x="40" y="{{ g.ty }}" text-anchor="end" font-size="11" fill="#A8A29E">{{ g.label }}</text>
+        </sc-for>
+        <line x1="50" y1="{{ gateY2 }}" x2="740" y2="{{ gateY2 }}" stroke="#B45309" stroke-width="1.4" stroke-dasharray="5 4"></line>
+        <text x="56" y="{{ gateLabelY2 }}" font-size="10.5" fill="#B45309" font-weight="600">deployment gate · 0.60</text>
+        <line x1="50" y1="{{ gemY }}" x2="740" y2="{{ gemY }}" stroke="#A8A29E" stroke-width="2" stroke-dasharray="4 3"></line>
+        <text x="740" y="{{ gemLabelY }}" text-anchor="end" font-size="10.5" fill="#8a8073">Gemma 0.567</text>
+        <path d="{{ area2 }}" fill="rgba(63,163,77,.1)"></path>
+        <path d="{{ line2 }}" fill="none" stroke="#3FA34D" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></path>
+        <circle cx="{{ lastX2 }}" cy="{{ lastY2 }}" r="4.5" fill="#3FA34D"></circle>
+        <text x="{{ lastX2 }}" y="{{ lastLabelY2 }}" text-anchor="end" font-size="11" fill="#2c7a37" font-weight="700">0.667</text>
+        <sc-for list="{{ xLabels2 }}" as="x" hint-placeholder-count="5">
+          <text x="{{ x.x }}" y="218" text-anchor="middle" font-size="10.5" fill="#A8A29E">{{ x.text }}</text>
+        </sc-for>
+      </svg>
+      <div style="font-size:11.5px;color:#78716C;line-height:1.55;margin-top:8px;padding-top:10px;border-top:1px solid #EDE8DA">
+        <span style="font-weight:600;color:#44403C;font-family:'JetBrains Mono',monospace">Fig. 2.</span> pass@1 vs. RLVR epoch. The verifiable-reward loop crosses the 0.60 deployment gate at epoch ≈ 4 and stabilises at 0.667 — a +17.6% relative lift over the frozen Gemma baseline.
+      </div>
+    </div>
+
+    <!-- DATA TABLE -->
+    <div style="margin-top:18px;background:#fff;border:1px solid #E2DCCB;border-radius:10px;overflow:hidden">
+      <div style="display:flex;padding:11px 18px;background:#F4F0E6;border-bottom:1px solid #E2DCCB;font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#78716C">
+        <span style="flex:1">task</span><span style="width:90px;text-align:right">Gemma</span><span style="width:90px;text-align:right">Cologic</span><span style="width:74px;text-align:right">Δ reward</span>
+      </div>
+      <sc-for list="{{ rows }}" as="r" hint-placeholder-count="6">
+        <div style="display:flex;align-items:center;padding:10px 18px;border-bottom:1px solid #EDE8DA;font-family:'JetBrains Mono',monospace;font-size:12.5px">
+          <span style="flex:1;color:#1C1917">{{ r.task }}</span>
+          <span style="width:90px;text-align:right;color:#78716C">{{ r.gem }}</span>
+          <span style="width:90px;text-align:right;color:#1C1917;font-weight:600">{{ r.col }}</span>
+          <span style="width:74px;text-align:right;font-weight:700;color:{{ r.dColor }}">{{ r.delta }}</span>
+        </div>
+      </sc-for>
+      <div style="display:flex;align-items:center;padding:12px 18px;background:#FBFAF6;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700">
+        <span style="flex:1">pass@1</span>
+        <span style="width:90px;text-align:right;color:#78716C">0.567</span>
+        <span style="width:90px;text-align:right;color:#3FA34D">0.667</span>
+        <span style="width:74px;text-align:right;color:#2f9e44">+0.100</span>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:#A8A29E;line-height:1.6">ho-bench · 6 tasks · 5 samples/task · reward = compile ∧ testbench-pass · served on Fireworks, verified in Modal sandboxes</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals(){
+    const tasks=[
+      { id:'ho_mux2_w16',   short:'mux2_w16',   gem:1.00, col:1.00, gp:'5/5', cp:'5/5' },
+      { id:'ho_cmp4',       short:'cmp4',       gem:1.00, col:1.00, gp:'5/5', cp:'5/5' },
+      { id:'ho_popcount16', short:'popcount16', gem:0.20, col:0.40, gp:'1/5', cp:'2/5' },
+      { id:'ho_max2',       short:'max2',       gem:1.00, col:1.00, gp:'5/5', cp:'5/5' },
+      { id:'ho_dec2to4',    short:'dec2to4',    gem:0.20, col:0.40, gp:'1/5', cp:'2/5' },
+      { id:'ho_gray2bin8',  short:'gray2bin8',  gem:0.00, col:0.20, gp:'0/5', cp:'1/5' },
+    ];
+
+    // ---- Figure 1: grouped bars ----
+    const P={x:50,y:24,w:690,h:236}; const baseY=P.y+P.h; // 260
+    const yP=v=>baseY - v*P.h;
+    const grid=[0,.25,.5,.75,1].map(v=>({ y:yP(v).toFixed(1), ty:(yP(v)+4).toFixed(1), label:v.toFixed(2) }));
+    const thrY=yP(0.60).toFixed(1); const thrLabelY=(yP(0.60)-6).toFixed(1);
+    const gw=P.w/tasks.length, bw=26;
+    const bars=[], whiskers=[], xLabels=[];
+    tasks.forEach((t,i)=>{
+      const cx=P.x+i*gw+gw/2;
+      const x1=cx-bw-3, x2=cx+3;
+      const gc=x1+bw/2, cc=x2+bw/2;
+      bars.push({ x:x1.toFixed(1), y:yP(t.gem).toFixed(1), w:bw, h:Math.max(0,baseY-yP(t.gem)).toFixed(1), fill:'#C9C0A8', cx:gc.toFixed(1), label:t.gem.toFixed(2), labelY:(yP(t.gem)-7).toFixed(1), labelFill:'#8a8073' });
+      bars.push({ x:x2.toFixed(1), y:yP(t.col).toFixed(1), w:bw, h:Math.max(0,baseY-yP(t.col)).toFixed(1), fill:'#3FA34D', cx:cc.toFixed(1), label:t.col.toFixed(2), labelY:(yP(t.col)-7).toFixed(1), labelFill:'#2c7a37' });
+      const se=Math.sqrt(t.col*(1-t.col)/5);
+      if (se>0.001){ const top=yP(Math.min(1,t.col+se)), bot=yP(Math.max(0,t.col-se)); whiskers.push({ x:cc.toFixed(1), x1:(cc-4).toFixed(1), x2:(cc+4).toFixed(1), top:top.toFixed(1), bot:bot.toFixed(1) }); }
+      xLabels.push({ x:cx.toFixed(1), text:t.short, sub:t.gp+' → '+t.cp });
+    });
+
+    // ---- Figure 2: pass@1 vs epoch ----
+    const series=[0.567,0.58,0.598,0.616,0.632,0.645,0.656,0.662,0.667];
+    const Q={x:50,y:18,w:690,h:168}; const baseY2=Q.y+Q.h; // 186
+    const lo=0.50, hi=0.72;
+    const yQ=v=>baseY2-((v-lo)/(hi-lo))*Q.h;
+    const grid2=[0.50,0.55,0.60,0.65,0.70].map(v=>({ y:yQ(v).toFixed(1), ty:(yQ(v)+4).toFixed(1), label:v.toFixed(2) }));
+    const gateY2=yQ(0.60).toFixed(1), gateLabelY2=(yQ(0.60)-6).toFixed(1);
+    const gemY=yQ(0.567).toFixed(1), gemLabelY=(yQ(0.567)+14).toFixed(1);
+    const pts=series.map((v,i)=>[Q.x+i/(series.length-1)*Q.w, yQ(v)]);
+    const line2=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+    const area2=line2+` L ${(Q.x+Q.w).toFixed(1)} ${baseY2} L ${Q.x} ${baseY2} Z`;
+    const last=pts[pts.length-1];
+    const xLabels2=series.map((v,i)=>({ x:(Q.x+i/(series.length-1)*Q.w).toFixed(1), text:'e'+i }));
+
+    // ---- table ----
+    const rows=tasks.map(t=>{ const d=t.col-t.gem; return { task:t.id, gem:t.gem.toFixed(2)+'  ('+t.gp+')', col:t.col.toFixed(2)+'  ('+t.cp+')', delta:(d>0?'+':'')+d.toFixed(2), dColor:d>0?'#2f9e44':'#A8A29E' }; });
+
+    return {
+      grid, thrY, thrLabelY, bars, whiskers, xLabels,
+      grid2, gateY2, gateLabelY2, gemY, gemLabelY, line2, area2,
+      lastX2:last[0].toFixed(1), lastY2:last[1].toFixed(1), lastLabelY2:(last[1]-10).toFixed(1), xLabels2,
+      rows,
+    };
+  }
+}
+</script>
+</body>
+</html>

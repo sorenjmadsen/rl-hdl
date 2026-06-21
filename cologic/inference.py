@@ -15,8 +15,8 @@ from __future__ import annotations
 import os
 from concurrent.futures import ThreadPoolExecutor
 
-from rl_hdl.prompt import build_messages
-from rl_hdl.schema import Task
+from cologic.prompt import build_messages
+from cologic.schema import Task
 
 DEFAULT_BASE_URL = "https://api.fireworks.ai/inference/v1"
 # Verilog-capable warm-start. Override via RLHDL_MODEL once the exact Fireworks

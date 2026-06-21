@@ -12,7 +12,7 @@ import json
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 
-from rl_hdl.schema import Task
+from cologic.schema import Task
 
 # A grader maps (task, completion) pairs -> result dicts: {reward, info, ...}.
 GradeBatch = Callable[[list[tuple[Task, str]]], list[dict]]
@@ -86,7 +86,7 @@ def evaluate(pairs: list[tuple[Task, str]], grade_batch: GradeBatch, *, model: s
 
 def local_grade_batch(pairs: list[tuple[Task, str]]) -> list[dict]:
     """In-process grader (no Modal). Good for smoke tests and small evals."""
-    from rl_hdl.verifier import grade
+    from cologic.verifier import grade
 
     out = []
     for task, completion in pairs:

@@ -40,7 +40,7 @@ just reseed the random vectors.
 
 ## Tasks
 
-`rl_hdl/tasks.py` ships training tasks, held-out tasks, and converted
+`cologic/tasks.py` ships training tasks, held-out tasks, and converted
 verified-gradient tasks:
 
 - **`TRAIN_TASKS`**: mux2, mux4, add4, cmp8, alu8, dec3to8, popcount8, shl8,
@@ -96,13 +96,13 @@ auto-pick one.)
 
 Output is a per-task table (`pass`, `mean_reward`), an aggregate `pass@1`, and a
 `baseline.json`. `mean_reward` is the dense signal — watch it move before
-`pass@1` does. The same `evaluate()` runs in-process via `rl_hdl.eval` for quick
+`pass@1` does. The same `evaluate()` runs in-process via `cologic.eval` for quick
 local iteration without Modal.
 
 ## Layout
 
 ```
-rl_hdl/
+cologic/
   schema.py     # Task + GradeResult (the locked seam)
   extract.py    # robust Verilog module extraction from LLM output
   verifier.py   # grade() — Verilator-grounded dense reward
@@ -111,6 +111,7 @@ rl_hdl/
   inference.py  # Fireworks (OpenAI-compatible) sampling
   eval.py       # pass@1 / mean-reward aggregation (grader-agnostic)
 modal_app.py    # Modal image (Verilator) + parallel grader + baseline entrypoint
+agents/         # Plan/Forge/Prove self-improvement loop on cologic (see agents/README.md)
 tests/
   test_verifier.py
   test_eval.py
@@ -127,3 +128,32 @@ uv venv
 uv pip install -e ".[dev]"
 uv run pytest -q
 ```
+
+## Decision records
+
+### ADR-001: consolidate the backend into `cologic/`
+
+**Status:** accepted (PR #3). **Date:** 2026-06-20.
+
+**Context.** Two reward engines had grown in parallel: `rl_hdl/` (Verilator,
+candidate-vs-golden-reference dense reward, plus task library, Fireworks inference,
+Modal parallel grader) and an earlier `cologic/` (iverilog + VCD toggle/power
+proxies, a CLI demo over `examples/systolic_array/`). "Cologic" is the product name
+(the `web/` visualizer + the `agents/` loop); having it also name a second, weaker
+engine was confusing.
+
+**Decision.**
+- The Verilator engine (`rl_hdl/`) is canonical and is **renamed to the `cologic/`
+  package** — one backend, named after the product.
+- The old iverilog/VCD engine, its `tests/test_reward.py`, and the
+  `examples/systolic_array/` demo are **removed**. Verilator + golden references are
+  the non-lying oracle; the iverilog path was redundant.
+- The Exa search spike (`search.mjs`, root `package.json`/`package-lock.json`, the
+  `exa-js` dep) is **removed** — scaffolding unrelated to the backend.
+
+**Consequences.**
+- Imports are `cologic.*` (was `rl_hdl.*`); the wheel ships `packages = ["cologic"]`.
+  The distribution name stays `rl-hdl` (the repo) and the Modal app stays `rl-hdl`.
+- **Dropped (revisit when needed):** the VCD-based **power/timing proxies** only the
+  old engine had. Re-add as real metrics on top of synthesis (yosys+sky130 for power,
+  OpenSTA for timing) rather than as toggle counts.

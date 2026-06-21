@@ -30,7 +30,7 @@ grader_image = (
         "cd /tmp/verilator && autoconf && ./configure && "
         "make -j$(nproc) && make install && rm -rf /tmp/verilator",
     )
-    .add_local_python_source("rl_hdl")
+    .add_local_python_source("cologic")
 )
 
 # Lightweight image for inference — just the OpenAI-compatible client. The
@@ -39,7 +39,7 @@ grader_image = (
 inference_image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install("openai>=1.0")
-    .add_local_python_source("rl_hdl")
+    .add_local_python_source("cologic")
 )
 
 app = modal.App("rl-hdl")
@@ -47,8 +47,8 @@ app = modal.App("rl-hdl")
 
 @app.function(image=grader_image, timeout=180)
 def grade_remote(completion: str, task) -> dict:
-    """Grade one (completion, task) in a container. Task pickles via rl_hdl."""
-    from rl_hdl.verifier import grade
+    """Grade one (completion, task) in a container. Task pickles via cologic."""
+    from cologic.verifier import grade
 
     r = grade(completion, task)
     return {"reward": r.reward, "info": r.info, "task_id": task.task_id}
@@ -72,7 +72,7 @@ def list_models(substr: str = "") -> list[str]:
 @app.function(image=inference_image, secrets=[modal.Secret.from_name("fireworks-api")], timeout=600)
 def sample_remote(task, n: int, model: str) -> list[str]:
     """Sample `n` completions for one task from Fireworks, inside Modal."""
-    from rl_hdl.inference import complete
+    from cologic.inference import complete
 
     temperature = 0.0 if n == 1 else 0.7  # greedy for a stable n=1 baseline read
     return [complete(task, model=model, temperature=temperature) for _ in range(n)]
@@ -80,8 +80,8 @@ def sample_remote(task, n: int, model: str) -> list[str]:
 
 @app.local_entrypoint()
 def main(split: str = "heldout", n: int = 1, selftest: bool = False, out: str = "baseline.json"):
-    from rl_hdl.eval import evaluate
-    from rl_hdl.tasks import HELDOUT_TASKS, TRAIN_TASKS
+    from cologic.eval import evaluate
+    from cologic.tasks import HELDOUT_TASKS, TRAIN_TASKS
 
     tasks = {"heldout": HELDOUT_TASKS, "train": TRAIN_TASKS}[split]
 
@@ -91,7 +91,7 @@ def main(split: str = "heldout", n: int = 1, selftest: bool = False, out: str = 
         pairs = [(t, t.reference_rtl) for t in tasks]
         model = "selftest-golden"
     else:
-        from rl_hdl.inference import model_id
+        from cologic.inference import model_id
 
         model = model_id()
         print(f"sampling n={n} from {model} for {len(tasks)} {split} tasks (in Modal) ...")
@@ -128,7 +128,7 @@ def bench(total: int = 64):
     """
     import time
 
-    from rl_hdl.tasks import SEED_TASKS
+    from cologic.tasks import SEED_TASKS
 
     goldens = [(t, t.reference_rtl) for t in SEED_TASKS]
     pairs = [goldens[i % len(goldens)] for i in range(total)]
