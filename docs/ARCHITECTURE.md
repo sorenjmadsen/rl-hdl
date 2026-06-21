@@ -3,6 +3,46 @@
 The decisions behind Cologic, captured from the founding discussion (Paritosh + Soren).
 This is the "why these signals, why this loop" doc; the code in `cologic/` is the start of it.
 
+## Pipeline at a glance
+
+```
+                         ┌─────────────────────────────────────────────┐
+                         │            cologic/  (the seam)              │
+                         └─────────────────────────────────────────────┘
+
+   TASK                 GENERATE              EXTRACT            VERIFY (reward)
+ ┌────────┐  prompt   ┌──────────┐  raw     ┌──────────┐ RTL  ┌──────────────────┐
+ │tasks.py│──────────▶│inference │─────────▶│extract.py│─────▶│   verifier.py    │
+ │ spec + │  prompt.py│  .py     │ messy    │ pull out │      │ Verilator builds │
+ │ golden │           │Fireworks │ LLM text │ module   │      │ candidate VS     │
+ │  ref   │           │ (policy) │          └──────────┘      │ golden, same RNG │
+ └────────┘           └──────────┘                           │ vectors → match% │
+      ▲                     ▲                                 └────────┬─────────┘
+      │                     │                                          │ GradeResult
+      │                     │                                          │ reward∈[0,1]
+      │                     │                                          ▼
+      │                     │                                   ┌────────────┐
+      │              weight │                                   │  eval.py   │ pass@1,
+      │              update │                                   │ aggregate  │ mean_reward
+      │                     │                                   └────────────┘
+      │              ┌──────┴───────────────────────────────┐
+      │              │  rft.py  →  fireworks_rft/  (RFT job) │   ← trains the policy
+      │              └──────────────────────────────────────┘      across sessions
+      │
+   GradeResult is grader-agnostic; same seam used by eval AND training.
+
+ ── RUNTIME / SCALE ──────────────────────────────────────────────────────────
+   modal_app.py : Modal image w/ Verilator, fans grading out via .map (parallel)
+   agents/      : Plan→Forge→Prove self-improvement loop on top of cologic
+   frontend/ web/: Forge dashboard (the walking minions)
+```
+
+The locked seam (`schema.py`), one function feeding both eval and training:
+
+```python
+grade(completion: str, task: Task) -> GradeResult(reward: float, info: dict)
+```
+
 ## Thesis
 
 Frontier models are weak at hardware design. The fix is the same loop that made coding
