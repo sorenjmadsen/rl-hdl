@@ -44,7 +44,7 @@ export const SNAPSHOT: Benchmark = {
 export async function fetchBenchmark(): Promise<{ data: Benchmark; live: boolean }> {
   try {
     const c = new AbortController();
-    const to = setTimeout(() => c.abort(), 4000);
+    const to = setTimeout(() => c.abort(), 9000); // his /state can cold-start
     const r = await fetch(STATE_URL, { signal: c.signal, cache: "no-store" });
     clearTimeout(to);
     if (!r.ok) throw new Error("bad status");

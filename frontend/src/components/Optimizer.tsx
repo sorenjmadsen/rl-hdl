@@ -26,6 +26,10 @@ export function Optimizer() {
   const abort = useRef<AbortController | null>(null);
 
   async function run() {
+    if (!token.trim()) {
+      setError("enter your X-RLHDL-Token to run a live optimization");
+      return;
+    }
     setRunning(true);
     setError("");
     setOutcome(null);

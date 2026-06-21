@@ -2,7 +2,9 @@
 // reductions: upload Verilog → agents rewrite it → equivalence-checked result.
 
 export const OPT_BASE = "https://yc-hack27--rl-hdl-web.modal.run";
-export const DEFAULT_TOKEN = "test123";
+// No token in source. Optionally injected at build via NEXT_PUBLIC_RLHDL_TOKEN
+// (Vercel env); otherwise the user pastes their own X-RLHDL-Token in the UI.
+export const DEFAULT_TOKEN = process.env.NEXT_PUBLIC_RLHDL_TOKEN ?? "";
 
 // A small default design so the demo runs with zero setup (a 4:1 mux).
 export const SAMPLE_NAME = "mux4.v";
