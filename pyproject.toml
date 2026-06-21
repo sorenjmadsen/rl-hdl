@@ -9,6 +9,7 @@ dependencies = []
 dev = ["pytest>=8"]
 eval = ["openai>=1.0", "modal>=0.64"]
 train = ["eval-protocol>=0.3.31", "fireworks-ai>=1.0.0a83", "modal>=0.64", "pytest>=8"]
+opt = ["ortools>=9.0"]   # cologic.optimize: LP resource allocation (GLOP)
 
 [build-system]
 requires = ["hatchling"]
