@@ -18,6 +18,24 @@
         {"name": "clk", "direction": "input", "width": 1},
         {"name": "rst_n", "direction": "input", "width": 1}
       ]
+    },
+    {
+      "id": "npu_mac_converter",
+      "file": "designs/npu_mac_converter.v",
+      "top_module": "mac_fp32_converter",
+      "spec": "Optimize this signed int34-to-IEEE754-fp32 converter for gate count while preserving its exact 2-stage pipelined I/O behaviour (leading-one normalize, shift, round-to-nearest-even).",
+      "stimulus_file": "designs/npu_mac_converter_stim.v",
+      "n_vectors": 128,
+      "seed": 7,
+      "ports": [
+        {"name": "clk", "direction": "input", "width": 1},
+        {"name": "i_ifm_datatype", "direction": "input", "width": 3},
+        {"name": "i_wfm_datatype", "direction": "input", "width": 3},
+        {"name": "i_exp", "direction": "input", "width": 6},
+        {"name": "i_intdata", "direction": "input", "width": 34},
+        {"name": "i_pipe_en", "direction": "input", "width": 2},
+        {"name": "o_data", "direction": "output", "width": 32}
+      ]
     }
   ]
 }
