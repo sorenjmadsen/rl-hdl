@@ -10,6 +10,7 @@ import pytest
 from cologic.upload import (
     build_clocked_testbench_template,
     is_clocked,
+    is_verilogeval_testbench,
     parse_interface,
     resolve_top,
     task_from_manifest_entry,
@@ -17,6 +18,8 @@ from cologic.upload import (
     task_from_upload,
     write_upload_dataset,
 )
+# Aliased so pytest doesn't collect this `test*`-named function as a test case.
+from cologic.upload import testbench_template_from_verilogeval as ve_template
 
 
 def test_parse_ansi_widths_and_output_reg():
@@ -131,6 +134,97 @@ def test_scaffold_fill_catches_non_equivalent_rewrite():
         stimulus=_STIMULUS,
     )
     broken = (_HELPER + "\n" + _TOP).replace("y <= y + xn;", "y <= y + xn + 8'd1;")
+    r = grade(broken, task)
+    assert r.info["equivalent"] is False
+
+
+# ── VerilogEval testbench ingestion ────────────────────────────────────────────
+
+# A clocked DFF and a minimal VerilogEval-style `*_test.sv`: a standalone `tb` that
+# instantiates RefModule (oracle) + TopModule (DUT) and tallies stats1.errors over
+# stats1.clocks. The adapter must retarget the two instances and inject RESULT.
+_VE_DFF = ("module dff(input clk, input rst_n, input d, output reg q);\n"
+           "  always @(posedge clk or negedge rst_n)\n"
+           "    if (!rst_n) q <= 1'b0; else q <= d;\n"
+           "endmodule\n")
+
+_VE_TESTBENCH = """`timescale 1 ps/1 ps
+module stimulus_gen (input clk, output logic rst_n, output logic d, input tb_match);
+  initial begin
+    rst_n = 0; d = 0;
+    @(posedge clk); rst_n = 1;
+    repeat (20) @(posedge clk) d <= $random;
+    $finish;
+  end
+endmodule
+
+module tb();
+  typedef struct packed { int errors; int clocks; } stats;
+  stats stats1;
+  reg clk = 0;
+  initial forever #5 clk = ~clk;
+  logic rst_n, d, q_ref, q_dut;
+  wire tb_match;
+  stimulus_gen stim1 (.clk, .rst_n, .d, .tb_match);
+  RefModule good1 (.clk, .rst_n, .d, .q(q_ref));
+  TopModule top_module1 (.clk, .rst_n, .d, .q(q_dut));
+  assign tb_match = ( q_ref === ( q_ref ^ q_dut ^ q_ref ) );
+  always @(posedge clk, negedge clk) begin
+    stats1.clocks++;
+    if (!tb_match) stats1.errors++;
+  end
+  final $display("Mismatches: %1d in %1d samples", stats1.errors, stats1.clocks);
+  initial begin #100000; $finish(); end
+endmodule
+"""
+
+
+def test_verilogeval_testbench_is_detected_over_scaffold():
+    assert is_verilogeval_testbench(_VE_TESTBENCH)
+    assert not is_verilogeval_testbench(_STIMULUS)  # a scaffold-fill `task stimulus;`
+
+
+def test_verilogeval_template_retargets_instances_and_injects_result():
+    tmpl = ve_template(_VE_TESTBENCH)
+    # The candidate/reference instances are retargeted to the grader placeholders…
+    assert "__DUT__ top_module1" in tmpl and "__REF__ good1" in tmpl
+    assert "RefModule" not in tmpl and "TopModule" not in tmpl
+    # …and a machine-readable verdict is injected (passed == total iff equivalent).
+    assert 'RESULT %0d %0d", stats1.clocks - stats1.errors, stats1.clocks' in tmpl
+
+
+def test_verilogeval_template_requires_stats_counters():
+    no_stats = _VE_TESTBENCH.replace("stats1.errors", "stats1.foo")
+    with pytest.raises(ValueError, match="stats1.errors/stats1.clocks"):
+        ve_template(no_stats)
+
+
+@pytest.mark.skipif(shutil.which("verilator") is None, reason="verilator not installed")
+def test_verilogeval_clocked_upload_self_grades_equivalent():
+    """A clocked design whose stimulus is a full VerilogEval testbench grades the
+    reference against itself as equivalent over real simulation."""
+    from cologic.grader import grade
+
+    task = task_from_upload(
+        {"dff.v": _VE_DFF},
+        prompt="Optimize this flip-flop for gate count.",
+        stimulus=_VE_TESTBENCH,
+        task_id="dff",
+    )
+    assert task.top_module == "dff" and task.clocked and task.testbench_template
+    r = grade(task.reference_rtl, task)
+    assert r.info["equivalent"] is True and r.info["eq_total"] > 0
+
+
+@pytest.mark.skipif(shutil.which("verilator") is None, reason="verilator not installed")
+def test_verilogeval_catches_non_equivalent_rewrite():
+    """A behaviour-changing rewrite must fail the VE-adapted differential check."""
+    from cologic.grader import grade
+
+    task = task_from_upload(
+        {"dff.v": _VE_DFF}, prompt="shrink it", stimulus=_VE_TESTBENCH,
+    )
+    broken = _VE_DFF.replace("else q <= d;", "else q <= ~d;")
     r = grade(broken, task)
     assert r.info["equivalent"] is False
 

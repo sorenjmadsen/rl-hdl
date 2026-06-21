@@ -250,6 +250,77 @@ endmodule
 """
 
 
+# ── VerilogEval testbench ingestion ────────────────────────────────────────────
+# Some clocked designs arrive with a full VerilogEval `*_test.sv` instead of a
+# scaffold-fill `task stimulus;`. That file is ALREADY a candidate-vs-reference
+# co-sim: a `tb` module instantiates `RefModule` (the oracle) and `TopModule` (the
+# design under test) on identical stimulus and tallies `stats1.errors` against
+# `stats1.clocks`. We retarget those two instances to the grader's __DUT__/__REF__
+# placeholders and inject the `RESULT <passed> <total>` line `cologic.verifier`
+# parses, so the design flows through the exact same differential-grade path as a
+# scaffold-fill one — no special-casing downstream.
+
+_VE_TB = re.compile(r"\bmodule\s+tb\b")
+_VE_REF_NAME = "RefModule"
+_VE_DUT_NAME = "TopModule"
+# `passed == total` iff the candidate never mismatched the reference, which is the
+# equivalence verdict cologic.grader.equivalence reads back. The VE harness counts
+# every sampled clock edge in stats1.clocks and every mismatch in stats1.errors.
+_VE_RESULT = (
+    "\n  // rl-hdl: machine-readable verdict for the differential grader.\n"
+    "  // passed == total iff the candidate never mismatched the reference.\n"
+    '  final $display("RESULT %0d %0d", stats1.clocks - stats1.errors, stats1.clocks);\n'
+)
+
+
+def is_verilogeval_testbench(stimulus: str) -> bool:
+    """True if `stimulus` is a full VerilogEval `*_test.sv` — a standalone `tb`
+    module instantiating RefModule + TopModule — rather than a scaffold-fill
+    `task stimulus;` fragment. Used to pick the right testbench-build path."""
+    return (
+        _VE_TB.search(stimulus) is not None
+        and re.search(rf"\b{_VE_DUT_NAME}\b", stimulus) is not None
+        and re.search(rf"\b{_VE_REF_NAME}\b", stimulus) is not None
+    )
+
+
+def testbench_template_from_verilogeval(test_sv: str) -> str:
+    """Adapt a VerilogEval `*_test.sv` into a differential `testbench_template`.
+
+    The VE testbench is already a candidate-vs-reference co-sim, so we keep its
+    clock, dual instantiation, and comparator intact and only (1) retarget its
+    `TopModule`/`RefModule` instances to the grader's __DUT__/__REF__ placeholders
+    (so `cologic.verifier.build_testbench` binds candidate vs. `<top>_ref`) and
+    (2) inject the `RESULT <passed> <total>` line the grader parses, derived from
+    the VE harness's own `stats1` counters.
+
+    The returned string keeps the __DUT__/__REF__ placeholders so the existing
+    substitution path in `build_testbench` applies unchanged.
+
+    NOTE: a VE testbench is self-contained and drives a FIXED stimulus, so a design
+    routed this way ignores the manifest's `n_vectors`/`seed` — its vector count is
+    whatever the testbench drives.
+    """
+    if not is_verilogeval_testbench(test_sv):
+        raise ValueError(
+            "not a VerilogEval testbench: expected a `tb` module instantiating "
+            "RefModule + TopModule"
+        )
+    if "stats1.errors" not in test_sv or "stats1.clocks" not in test_sv:
+        raise ValueError(
+            "VerilogEval testbench is missing the stats1.errors/stats1.clocks "
+            "counters the RESULT verdict is derived from"
+        )
+    tb = re.sub(rf"\b{_VE_DUT_NAME}\b", "__DUT__", test_sv)
+    tb = re.sub(rf"\b{_VE_REF_NAME}\b", "__REF__", tb)
+    # The `tb` module is the last one in the file, so its closing `endmodule` is the
+    # last one — inject the verdict there, where `stats1` is in scope.
+    idx = tb.rfind("endmodule")
+    if idx == -1:
+        raise ValueError("VerilogEval testbench has no endmodule")
+    return tb[:idx] + _VE_RESULT + tb[idx:]
+
+
 def task_from_upload(
     files: dict[str, str],
     *,
@@ -263,10 +334,14 @@ def task_from_upload(
 ) -> Task:
     """Build a gradeable Task from the upload flow: many Verilog files + a prompt.
 
-    Clocked designs (a clock-like port present) REQUIRE a scaffold-fill `stimulus`;
-    it becomes the differential testbench template. Combinational designs ignore
-    `stimulus` and grade through the auto-generated random-vector testbench. The
-    `prompt` textbox becomes the Task spec (what the optimizer is told to do).
+    Clocked designs (a clock-like port present) REQUIRE a `stimulus`, in one of two
+    forms — it becomes the differential testbench template either way:
+      * a scaffold-fill fragment defining `task stimulus;` (wrapped by the harness), or
+      * a full VerilogEval `*_test.sv` (a `tb` instantiating RefModule + TopModule),
+        adapted in place by `testbench_template_from_verilogeval`.
+    Combinational designs ignore `stimulus` and grade through the auto-generated
+    random-vector testbench. The `prompt` textbox becomes the Task spec (what the
+    optimizer is told to do).
 
     `interface` overrides the parsed ports for headers the parser can't handle.
     """
@@ -280,9 +355,14 @@ def task_from_upload(
         if not stimulus or not stimulus.strip():
             raise ValueError(
                 "this is a clocked design — provide a scaffold-fill stimulus "
-                "(defining `task stimulus;`)"
+                "(defining `task stimulus;`) or a VerilogEval `*_test.sv`"
             )
-        tb_template = build_clocked_testbench_template(ports, stimulus, task_id=task_id)
+        # A full VerilogEval testbench is already a differential co-sim; adapt it in
+        # place. A scaffold-fill fragment gets wrapped in the harness shell.
+        if is_verilogeval_testbench(stimulus):
+            tb_template = testbench_template_from_verilogeval(stimulus)
+        else:
+            tb_template = build_clocked_testbench_template(ports, stimulus, task_id=task_id)
 
     return Task(
         task_id=task_id,
@@ -315,8 +395,9 @@ def task_from_manifest_entry(
       id          : design id (becomes task_id, submission filename)
       file        : one RTL path, relative to base_dir
       files       : OR a list of RTL paths (hierarchical design)
-      stimulus_file / stimulus : scaffold-fill stimulus (path or inline) — REQUIRED
-                    for clocked designs (defines `task stimulus;`)
+      stimulus_file / stimulus : stimulus (path or inline) — REQUIRED for clocked
+                    designs. Either a scaffold-fill fragment (`task stimulus;`) or a
+                    full VerilogEval `*_test.sv` (auto-detected).
       top_module  : explicit top (else inferred)
       ports       : explicit interface [{name, direction, width}] (else parsed)
       spec        : per-design optimize prompt (else `default_spec`)

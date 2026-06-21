@@ -36,6 +36,21 @@
         {"name": "i_pipe_en", "direction": "input", "width": 2},
         {"name": "o_data", "direction": "output", "width": 32}
       ]
+    },
+    {
+      "id": "Prob129_ece241_2013_q8",
+      "file": "designs/Prob129_ece241_2013_q8.v",
+      "top_module": "Prob129",
+      "spec": "Optimize this sequence-detector FSM for gate count while preserving its exact cycle-accurate I/O behaviour (asynchronous active-low reset).",
+      "stimulus_file": "designs/Prob129_ece241_2013_q8_test.sv",
+      "n_vectors": 256,
+      "seed": 1,
+      "ports": [
+        {"name": "clk", "direction": "input", "width": 1},
+        {"name": "aresetn", "direction": "input", "width": 1},
+        {"name": "x", "direction": "input", "width": 1},
+        {"name": "z", "direction": "output", "width": 1}
+      ]
     }
   ]
 }
