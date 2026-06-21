@@ -130,7 +130,7 @@ def claude_check_entry():
 def sia_run_remote(
     max_gen: int, run_id: int, target_model: str, meta_model: str,
     n_candidates: int, temperature: float, max_repair: int, meta_max_turns: int,
-    upload: dict | None = None,
+    upload: dict | None = None, max_tokens: int = 2048,
 ) -> dict:
     """Run the full SIA loop (meta agent evolves the scaffold) and return each
     generation's score plus the refined RTL.
@@ -176,6 +176,7 @@ def sia_run_remote(
     env["COLOGIC_N_CANDIDATES"] = str(n_candidates)
     env["COLOGIC_TEMPERATURE"] = str(temperature)
     env["COLOGIC_MAX_REPAIR"] = str(max_repair)
+    env["COLOGIC_MAX_TOKENS"] = str(max_tokens)
 
     # Invoke SIA's entry point directly (the console script isn't reliably on PATH and
     # the published package has no __main__); run args fall through as sys.argv.

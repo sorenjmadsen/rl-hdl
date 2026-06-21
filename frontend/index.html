@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#05100b; --bg-1:#081410; --bg-2:#0a1b13; --inset:#040c08;
+    --line:#143020; --line-2:#1d4530;
+    --accent:#37d98a; --accent-bright:#74ffb4; --accent-dim:#2a7d57;
+    --muted:#4f7a64; --faint:#2c4d3c;
+    --amber:#e3b063; --red:#e87a66; --text:#c2ead5;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  textarea,input,select,button{font-family:inherit;font-size:inherit;color:inherit}
+  textarea{resize:vertical}
+  button{cursor:pointer}
+  ::selection{background:var(--accent-dim);color:#04140c}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:var(--inset)}
+  ::-webkit-scrollbar-thumb{background:var(--line-2);border:2px solid var(--inset)}
+  ::-webkit-scrollbar-thumb:hover{background:var(--accent-dim)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+  @keyframes sweep{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
+</style>
+</helmet>
+
+<div ref="{{ rootRef }}" style="position:relative;height:100vh;display:flex;flex-direction:column;overflow:hidden">
+
+  <div ref="{{ gridRef }}" style="position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(rgba(90,200,150,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(90,200,150,.035) 1px,transparent 1px);background-size:34px 34px"></div>
+  <div ref="{{ scanRef }}" style="position:fixed;inset:0;pointer-events:none;z-index:1;background-image:repeating-linear-gradient(0deg,rgba(0,0,0,0) 0px,rgba(0,0,0,0) 2px,rgba(0,0,0,.10) 3px);opacity:.6"></div>
+
+  <!-- ===== HEADER ===== -->
+  <header style="position:relative;z-index:2;display:flex;align-items:center;gap:18px;padding:12px 22px;border-bottom:1px solid var(--line);background:var(--bg-1)">
+    <div style="display:flex;align-items:center;gap:11px">
+      <div style="width:26px;height:26px;border:1px solid var(--accent);display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px;padding:3px">
+        <div style="background:var(--accent)"></div><div style="background:var(--faint)"></div>
+        <div style="background:var(--faint)"></div><div style="background:var(--accent-bright)"></div>
+      </div>
+      <div style="line-height:1.1">
+        <div style="font-weight:700;letter-spacing:.1em;color:var(--accent-bright);font-size:15px">CoLogic</div>
+        <div style="font-size:10px;letter-spacing:.2em;color:var(--muted)">RTL&nbsp;OPTIMIZER&nbsp;//&nbsp;FROZEN&nbsp;GRADER</div>
+      </div>
+    </div>
+
+    <div style="flex:1"></div>
+
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 11px;border:1px solid var(--line-2);background:var(--inset)">
+      <div style="width:7px;height:7px;border-radius:50%;background:{{ statusColor }};box-shadow:0 0 7px {{ statusColor }};animation:{{ statusAnim }}"></div>
+      <span style="font-size:11px;letter-spacing:.16em;color:var(--text)">{{ statusLabel }}</span>
+    </div>
+
+    <button onClick="{{ onDemo }}" style="background:transparent;border:1px solid var(--line-2);color:var(--muted);padding:6px 12px;letter-spacing:.12em;font-size:11px" style-hover="border-color:var(--accent);color:var(--accent)">&#9655;&nbsp;DEMO&nbsp;RUN</button>
+
+    <div style="display:flex;flex-direction:column;gap:3px">
+      <label style="font-size:9px;letter-spacing:.18em;color:var(--muted)">X&#8209;RLHDL&#8209;TOKEN</label>
+      <input value="{{ token }}" onInput="{{ onToken }}" type="password" placeholder="paste token" spellcheck="false" style="width:190px;background:var(--inset);border:1px solid {{ tokenBorder }};padding:6px 9px;color:var(--accent);outline:none;letter-spacing:.05em" style-focus="border-color:var(--accent)" />
+    </div>
+  </header>
+
+  <!-- ===== BODY ===== -->
+  <main style="position:relative;z-index:2;flex:1;display:grid;grid-template-columns:minmax(400px,460px) 1fr;min-height:0">
+
+    <!-- ===== CONFIG COLUMN ===== -->
+    <section style="overflow-y:auto;border-right:1px solid var(--line);padding:22px 22px 60px;display:flex;flex-direction:column;gap:26px;background:linear-gradient(180deg,rgba(8,20,16,.4),transparent 120px)">
+
+      <!-- files -->
+      <div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+          <div style="color:var(--accent);letter-spacing:.16em;font-weight:600;font-size:12px">// DESIGN FILES</div>
+          <div style="font-size:10px;color:var(--muted)">{{ fileCountLabel }}</div>
+        </div>
+        <div ref="{{ dropRef }}" onClick="{{ openFileDialog }}" onDragOver="{{ onDragOver }}" onDragLeave="{{ onDragLeave }}" onDrop="{{ onDrop }}" style="border:1px dashed {{ dropBorder }};background:{{ dropBg }};padding:22px 16px;text-align:center;cursor:pointer;transition:border-color .12s,background .12s">
+          <div style="font-size:22px;color:var(--accent-dim);margin-bottom:7px;letter-spacing:.1em">[ + ]</div>
+          <div style="color:var(--text);font-size:12px">drop <span style="color:var(--accent)">.v / .sv</span> files here</div>
+          <div style="color:var(--muted);font-size:10px;margin-top:4px">design + any submodules &nbsp;·&nbsp; click to browse</div>
+        </div>
+        <input ref="{{ fileInputRef }}" type="file" accept=".v,.sv" multiple onChange="{{ onFilePick }}" style="display:none" />
+        <sc-if value="{{ hasFiles }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:9px;display:flex;flex-direction:column;gap:5px">
+            <sc-for list="{{ files }}" as="f" hint-placeholder-count="0">
+              <div style="display:flex;align-items:center;gap:9px;padding:6px 10px;background:var(--bg-2);border:1px solid var(--line)">
+                <span style="color:var(--accent-dim)">&#9636;</span>
+                <span style="flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.name }}</span>
+                <span style="color:var(--muted);font-size:10px">{{ f.size }}</span>
+                <button onClick="{{ f.remove }}" style="background:none;border:none;color:var(--muted);padding:0 2px;font-size:14px;line-height:1" style-hover="color:var(--red)">&times;</button>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- testbench -->
+      <div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+          <div style="color:var(--accent);letter-spacing:.16em;font-weight:600;font-size:12px">// TESTBENCH STIMULUS</div>
+          <button onClick="{{ toggleStimHelp }}" style="background:none;border:none;color:var(--muted);font-size:10px;letter-spacing:.1em;padding:0" style-hover="color:var(--accent)">{{ stimHelpLabel }}</button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.6">Combinational designs: leave blank (auto vectors). Clocked designs (<span style="color:var(--text)">clk</span> port): supply a scaffold&#8209;fill <span style="color:var(--text)">task stimulus</span>.</div>
+        <textarea value="{{ stimulus }}" onInput="{{ onStimulus }}" rows="5" spellcheck="false" placeholder="task stimulus; ... endtask  (clocked designs only)" style="width:100%;background:var(--inset);border:1px solid var(--line);padding:10px;color:var(--accent);outline:none;line-height:1.55;tab-size:2" style-focus="border-color:var(--accent-dim)"></textarea>
+        <sc-if value="{{ stimHelpOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:9px;border:1px solid var(--line);background:var(--bg-2)">
+            <div style="padding:6px 10px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.14em;color:var(--muted);display:flex;justify-content:space-between">
+              <span>SCAFFOLD&#8209;FILL CONTRACT</span><button onClick="{{ useExample }}" style="background:none;border:none;color:var(--accent);font-size:10px;letter-spacing:.1em;padding:0" style-hover="color:var(--accent-bright)">USE EXAMPLE &#8594;</button>
+            </div>
+            <div style="padding:9px 11px;font-size:10px;color:var(--muted);line-height:1.7">
+              &#8226; define <span style="color:var(--text)">task stimulus;</span> — the entry point<br>
+              &#8226; drive input ports by name<br>
+              &#8226; advance time with <span style="color:var(--text)">@(posedge clk);</span> — never drive the clock<br>
+              &#8226; call <span style="color:var(--text)">rlhdl_sample;</span> when outputs should match
+            </div>
+            <pre style="margin:0;padding:11px;border-top:1px solid var(--line);background:var(--inset);color:var(--accent);font-size:11px;line-height:1.6;overflow-x:auto">{{ exampleStim }}</pre>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- prompt -->
+      <div>
+        <div style="color:var(--accent);letter-spacing:.16em;font-weight:600;font-size:12px;margin-bottom:10px">// OPTIMIZATION GOAL</div>
+        <textarea value="{{ prompt }}" onInput="{{ onPrompt }}" rows="3" spellcheck="false" placeholder="Optimize this 2&#215;2 matmul for gate count while preserving behavior." style="width:100%;background:var(--inset);border:1px solid var(--line);padding:10px;color:var(--text);outline:none;line-height:1.55" style-focus="border-color:var(--accent-dim)"></textarea>
+      </div>
+
+      <!-- mode -->
+      <div>
+        <div style="color:var(--accent);letter-spacing:.16em;font-weight:600;font-size:12px;margin-bottom:10px">// MODE</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+          <button onClick="{{ setSia }}" style="text-align:left;padding:11px 12px;background:{{ siaBg }};border:1px solid {{ siaBorder }};color:{{ siaColor }}" style-hover="border-color:var(--accent-dim)">
+            <div style="font-weight:700;letter-spacing:.1em;margin-bottom:4px">SIA</div>
+            <div style="font-size:10px;color:var(--muted);line-height:1.45">meta&#8209;agent evolves the optimizer · deeper · ~10&#8211;15 min</div>
+          </button>
+          <button onClick="{{ setHarness }}" style="text-align:left;padding:11px 12px;background:{{ harBg }};border:1px solid {{ harBorder }};color:{{ harColor }}" style-hover="border-color:var(--accent-dim)">
+            <div style="font-weight:700;letter-spacing:.1em;margin-bottom:4px">HARNESS</div>
+            <div style="font-size:10px;color:var(--muted);line-height:1.45">single&#8209;shot iterative refine · faster · ~1&#8211;3 min</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- advanced -->
+      <div>
+        <button onClick="{{ toggleAdvanced }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;padding:0;color:var(--accent);letter-spacing:.16em;font-weight:600;font-size:12px" style-hover="color:var(--accent-bright)">
+          <span>// PARAMETERS</span>
+          <span style="color:var(--muted);font-size:11px">{{ advChevron }}</span>
+        </button>
+        <sc-if value="{{ advancedOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:11px 14px">
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">{{ genLabel }}</span><input type="number" min="1" value="{{ adv.max_generations }}" onInput="{{ onMaxGen }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">candidates / gen (n_candidates)</span><input type="number" min="1" value="{{ adv.n_candidates }}" onInput="{{ onNCand }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">temperature</span><input type="number" min="0" max="2" step="0.1" value="{{ adv.temperature }}" onInput="{{ onTemp }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">max_repair_rounds</span><input type="number" min="0" value="{{ adv.max_repair_rounds }}" onInput="{{ onRepair }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">meta_model</span><select value="{{ adv.meta_model }}" onChange="{{ onMetaModel }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none"><option value="sonnet">sonnet</option><option value="opus">opus</option><option value="haiku">haiku</option></select></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">meta_max_turns</span><input type="number" min="1" value="{{ adv.meta_max_turns }}" onInput="{{ onMetaTurns }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">max_tokens / sample</span><input type="number" min="256" step="256" value="{{ adv.max_tokens }}" onInput="{{ onMaxTokens }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">n_vectors (equiv check)</span><input type="number" min="1" value="{{ adv.n_vectors }}" onInput="{{ onNVectors }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
+            <sc-if value="{{ isHarness }}" hint-placeholder-val="{{ false }}">
+              <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">patience (harness)</span><input type="number" min="1" value="{{ adv.patience }}" onInput="{{ onPatience }}" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
+            </sc-if>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:10px;color:var(--muted);letter-spacing:.06em">top_module (override)</span><input value="{{ topOverride }}" onInput="{{ onTopOverride }}" placeholder="auto" spellcheck="false" style="background:var(--inset);border:1px solid var(--line);padding:6px 8px;color:var(--text);outline:none" style-focus="border-color:var(--accent-dim)" /></label>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- launch -->
+      <div style="margin-top:auto;padding-top:6px">
+        <sc-if value="{{ showSiaWarn }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-bottom:10px;padding:9px 11px;border:1px solid var(--amber);background:rgba(227,176,99,.07);color:var(--amber);font-size:10px;line-height:1.6">&#9650; SIA spends real LLM budget per generation. Keep <span style="color:var(--text)">max_generations</span> small ({{ adv.max_generations }} set).</div>
+        </sc-if>
+        <button onClick="{{ onLaunch }}" disabled="{{ launchDisabled }}" style="width:100%;padding:14px;background:{{ launchBg }};border:1px solid var(--accent);color:{{ launchColor }};font-weight:700;letter-spacing:.16em;font-size:13px;position:relative;overflow:hidden" style-hover="background:var(--accent);color:#04140c">{{ launchLabel }}</button>
+        <div style="margin-top:8px;font-size:10px;color:var(--faint);text-align:center;letter-spacing:.08em">POST {{ baseUrl }}/optimize</div>
+      </div>
+
+    </section>
+
+    <!-- ===== OUTPUT COLUMN ===== -->
+    <section style="overflow-y:auto;padding:22px 26px 60px;display:flex;flex-direction:column;gap:20px">
+
+      <!-- IDLE -->
+      <sc-if value="{{ isIdle }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:26px;color:var(--muted);min-height:60vh">
+          <div style="display:flex;align-items:center;gap:0;flex-wrap:wrap;justify-content:center">
+            <sc-for list="{{ pipeline }}" as="p" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:0">
+                <div style="border:1px solid var(--line-2);padding:13px 16px;min-width:96px">
+                  <div style="color:var(--accent-dim);font-size:10px;letter-spacing:.14em">{{ p.tag }}</div>
+                  <div style="color:var(--text);font-size:12px;margin-top:3px">{{ p.name }}</div>
+                </div>
+                <sc-if value="{{ p.arrow }}" hint-placeholder-val="{{ false }}"><span style="color:var(--faint);padding:0 9px">&#8594;</span></sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="font-size:12px;line-height:1.7;max-width:430px">Upload Verilog, state a goal, and launch.<br>The frozen grader — <span style="color:var(--accent)">Verilator</span> equivalence + <span style="color:var(--accent)">Yosys</span> gate count — is the only judge.<br><span style="color:var(--accent)">_</span><span style="animation:blink 1s step-end infinite;color:var(--accent)">&#9608;</span></div>
+        </div>
+      </sc-if>
+
+      <!-- PARSE ECHO (running/done) -->
+      <sc-if value="{{ hasParse }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px solid var(--line-2);background:var(--bg-1)">
+          <div style="padding:8px 13px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.16em;color:var(--muted);display:flex;justify-content:space-between">
+            <span>PARSE CONFIRMED</span><span style="color:var(--accent-dim)">job {{ jobShort }}</span>
+          </div>
+          <div style="padding:13px;display:flex;gap:30px;flex-wrap:wrap">
+            <div><div style="font-size:10px;color:var(--muted);letter-spacing:.1em;white-space:nowrap">TOP MODULE</div><div style="color:var(--accent-bright);font-size:18px;font-weight:600">{{ parse.top_module }}</div></div>
+            <div><div style="font-size:10px;color:var(--muted);letter-spacing:.1em">TYPE</div><div style="color:var(--text);font-size:18px;font-weight:600">{{ clockedLabel }}</div></div>
+            <div><div style="font-size:10px;color:var(--muted);letter-spacing:.1em;white-space:nowrap">BASELINE CELLS</div><div style="color:var(--text);font-size:18px;font-weight:600">{{ parse.baseline_cells }}</div></div>
+            <div><div style="font-size:10px;color:var(--muted);letter-spacing:.1em">MODE</div><div style="color:var(--text);font-size:18px;font-weight:600">{{ parseModeU }}</div></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- RUNNING -->
+      <sc-if value="{{ isBusy }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px solid var(--line-2);background:var(--bg-1);padding:18px">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:20px;height:20px;border:2px solid var(--line-2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite"></div>
+            <div style="flex:1">
+              <div style="color:var(--accent-bright);letter-spacing:.1em;font-weight:600">{{ busyTitle }}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">{{ busySub }}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:10px;color:var(--muted);letter-spacing:.1em">ELAPSED</div>
+              <div style="font-size:22px;color:var(--text);font-weight:600;font-variant-numeric:tabular-nums">{{ elapsedFmt }}</div>
+            </div>
+          </div>
+          <div style="margin-top:15px;height:3px;background:var(--inset);overflow:hidden;position:relative">
+            <div style="position:absolute;top:0;bottom:0;width:25%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sweep 1.6s ease-in-out infinite"></div>
+          </div>
+          <div style="margin-top:12px;font-size:11px;color:var(--faint);letter-spacing:.05em">polling GET {{ baseUrl }}/jobs/{{ jobShort }} every ~7s · expected {{ expectedWindow }}</div>
+        </div>
+      </sc-if>
+
+      <!-- ERROR -->
+      <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px solid var(--red);background:rgba(232,122,102,.06)">
+          <div style="padding:9px 13px;border-bottom:1px solid rgba(232,122,102,.4);font-size:10px;letter-spacing:.16em;color:var(--red);display:flex;justify-content:space-between"><span>&#9650; {{ errorCode }}</span><span style="color:var(--muted)">request failed</span></div>
+          <pre style="margin:0;padding:14px;color:var(--text);font-size:11px;line-height:1.6;white-space:pre-wrap;word-break:break-word;max-height:340px;overflow:auto">{{ errorDetail }}</pre>
+        </div>
+      </sc-if>
+
+      <!-- DONE -->
+      <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <div style="flex:1;min-width:200px;border:1px solid {{ equivBorder }};background:{{ equivBg }};padding:14px">
+            <div style="font-size:10px;color:var(--muted);letter-spacing:.14em">EQUIVALENCE</div>
+            <div style="font-size:20px;font-weight:700;color:{{ equivColor }};margin-top:4px">{{ equivText }}</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:3px">frozen grader · Verilator</div>
+          </div>
+          <div style="flex:1;min-width:200px;border:1px solid var(--line-2);background:var(--bg-1);padding:14px">
+            <div style="font-size:10px;color:var(--muted);letter-spacing:.14em">GATE COUNT</div>
+            <div style="margin-top:4px;display:flex;align-items:baseline;gap:8px">
+              <span style="font-size:20px;font-weight:700;color:var(--muted)">{{ cellsBaseline }}</span>
+              <span style="color:var(--faint)">&#8594;</span>
+              <span style="font-size:26px;font-weight:700;color:var(--accent-bright)">{{ cellsBest }}</span>
+              <span style="font-size:14px;font-weight:600;color:var(--accent);margin-left:2px">{{ cellsPct }}</span>
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:3px">Yosys cells</div>
+          </div>
+          <sc-if value="{{ hasReward }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;min-width:160px;border:1px solid var(--line-2);background:var(--bg-1);padding:14px">
+              <div style="font-size:10px;color:var(--muted);letter-spacing:.14em">BEST REWARD</div>
+              <div style="font-size:20px;font-weight:700;color:var(--text);margin-top:4px">{{ bestReward }}</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:3px">{{ bestGenLabel }}</div>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- SIA generation table -->
+        <sc-if value="{{ isSiaResult }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid var(--line);background:var(--bg-1)">
+            <div style="padding:8px 13px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.16em;color:var(--muted)">EVOLUTION — PER GENERATION</div>
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;font-size:12px">
+                <thead><tr style="color:var(--muted);font-size:10px;letter-spacing:.1em;text-align:left">
+                  <th style="padding:8px 13px;font-weight:500">GEN</th>
+                  <th style="padding:8px 13px;font-weight:500">MEAN REWARD</th>
+                  <th style="padding:8px 13px;font-weight:500">CELLS</th>
+                  <th style="padding:8px 13px;font-weight:500">EQUIVALENT</th>
+                  <th style="padding:8px 13px;font-weight:500">AREA &#916;</th>
+                </tr></thead>
+                <tbody>
+                  <sc-for list="{{ genRows }}" as="g" hint-placeholder-count="2">
+                    <tr style="border-top:1px solid var(--line);background:{{ g.rowBg }}">
+                      <td style="padding:9px 13px;color:{{ g.gColor }};font-weight:600">{{ g.gen }}{{ g.bestTag }}</td>
+                      <td style="padding:9px 13px;color:var(--text)">{{ g.reward }}</td>
+                      <td style="padding:9px 13px;color:var(--text)">{{ g.cellsTxt }}</td>
+                      <td style="padding:9px 13px;color:{{ g.equivColor }}">{{ g.equiv }}</td>
+                      <td style="padding:9px 13px;color:var(--accent)">{{ g.area }}</td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- HARNESS chart -->
+        <sc-if value="{{ isHarnessResult }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid var(--line);background:var(--bg-1)">
+            <div style="padding:8px 13px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.16em;color:var(--muted)">GATE&#8209;COUNT CURVE — CELLS / GENERATION</div>
+            <div style="padding:16px 13px 8px" ref="{{ chartHostRef }}">{{ chartEl }}</div>
+          </div>
+        </sc-if>
+
+        <!-- refined verilog -->
+        <div style="border:1px solid var(--line-2);background:var(--bg-1)">
+          <div style="padding:8px 13px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:10px;letter-spacing:.16em;color:var(--accent)">REFINED VERILOG — {{ parse.top_module }}.v</span>
+            <div style="display:flex;gap:8px">
+              <button onClick="{{ onCopy }}" style="background:transparent;border:1px solid var(--line-2);color:var(--muted);padding:4px 11px;font-size:10px;letter-spacing:.1em" style-hover="border-color:var(--accent);color:var(--accent)">{{ copyLabel }}</button>
+              <button onClick="{{ onDownload }}" style="background:transparent;border:1px solid var(--line-2);color:var(--accent);padding:4px 11px;font-size:10px;letter-spacing:.1em" style-hover="background:var(--accent);color:#04140c">&#8595; DOWNLOAD .v</button>
+            </div>
+          </div>
+          <pre style="margin:0;padding:14px;color:var(--accent);font-size:12px;line-height:1.65;overflow:auto;max-height:420px;white-space:pre">{{ refinedRtl }}</pre>
+        </div>
+
+        <!-- evolve diff (SIA) -->
+        <sc-if value="{{ hasDiff }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid var(--line)">
+            <button onClick="{{ toggleEvolve }}" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:var(--bg-1);border:none;color:var(--accent);letter-spacing:.14em;font-size:11px" style-hover="color:var(--accent-bright)">
+              <span>HOW THE OPTIMIZER EVOLVED — gen1 &#8594; gen2 scaffold diff</span>
+              <span style="color:var(--muted)">{{ evolveChevron }}</span>
+            </button>
+            <sc-if value="{{ evolveOpen }}" hint-placeholder-val="{{ false }}">
+              <pre style="margin:0;padding:14px;border-top:1px solid var(--line);background:var(--inset);color:var(--text);font-size:11px;line-height:1.6;overflow:auto;max-height:380px;white-space:pre">{{ diffText }}</pre>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <div style="display:flex;justify-content:flex-end">
+          <button onClick="{{ onReset }}" style="background:transparent;border:1px solid var(--line-2);color:var(--muted);padding:7px 16px;font-size:11px;letter-spacing:.12em" style-hover="border-color:var(--accent);color:var(--accent)">&#8635; NEW JOB</button>
+        </div>
+
+      </sc-if>
+
+    </section>
+  </main>
+
+  <!-- ===== FOOTER ===== -->
+  <footer style="position:relative;z-index:2;display:flex;align-items:center;gap:18px;padding:7px 22px;border-top:1px solid var(--line);background:var(--bg-1);font-size:10px;letter-spacing:.08em;color:var(--faint)">
+    <span style="color:var(--muted)">CoLogic</span>
+    <span>{{ baseUrl }}</span>
+    <div style="flex:1"></div>
+    <span>frozen grader: Verilator equiv + Yosys cells</span>
+    <span style="color:var(--accent-dim)">●</span>
+    <span>{{ statusLabel }}</span>
+  </footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;emerald&quot;,&quot;cyan&quot;,&quot;amber&quot;,&quot;violet&quot;],&quot;default&quot;:&quot;emerald&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;scanlines&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;grid&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    let savedTok = '';
+    try { savedTok = localStorage.getItem('rlhdl_token') || ''; } catch(e){}
+    this.state = {
+      token: savedTok,
+      baseUrl: 'https://yc-hack27--rl-hdl-web.modal.run',
+      fileMeta: [],
+      prompt: '',
+      stimulus: '',
+      topOverride: '',
+      mode: 'sia',
+      adv: { max_generations:2, n_candidates:4, temperature:0.9, max_repair_rounds:1, patience:3, meta_model:'sonnet', meta_max_turns:60, max_tokens:4096, n_vectors:256 },
+      stimHelpOpen: false,
+      advancedOpen: true,
+      evolveOpen: false,
+      phase: 'idle',          // idle | submitting | running | done | error
+      jobId: '',
+      parse: null,            // {top_module, clocked, baseline_cells, mode}
+      elapsed: 0,
+      result: null,
+      norm: null,             // normalized result
+      errorCode: '',
+      errorDetail: '',
+      copyLabel: 'COPY',
+      demo: false
+    };
+    this.fileObjs = [];
+    this.rootRef = React.createRef();
+    this.gridRef = React.createRef();
+    this.scanRef = React.createRef();
+    this.dropRef = React.createRef();
+    this.fileInputRef = React.createRef();
+    this.chartHostRef = React.createRef();
+    this._timers = [];
+  }
+
+  componentDidMount(){ this.applyTheme(); }
+  componentDidUpdate(){ this.applyTheme(); }
+  componentWillUnmount(){ this.clearTimers(); }
+
+  applyTheme(){
+    const accentMap = {
+      emerald:['#37d98a','#74ffb4','#2a7d57'],
+      cyan:['#4fd6e0','#86f4fb','#2f8a92'],
+      amber:['#e6b15e','#ffd089','#9a7536'],
+      violet:['#b69cf5','#d8c9ff','#6f57b0']
+    };
+    const a = accentMap[this.props.accent] || accentMap.emerald;
+    const r = document.documentElement;
+    r.style.setProperty('--accent', a[0]);
+    r.style.setProperty('--accent-bright', a[1]);
+    r.style.setProperty('--accent-dim', a[2]);
+    if (this.gridRef.current) this.gridRef.current.style.display = (this.props.grid === false) ? 'none' : 'block';
+    if (this.scanRef.current) this.scanRef.current.style.display = (this.props.scanlines === false) ? 'none' : 'block';
+  }
+
+  clearTimers(){ this._timers.forEach(t => { clearInterval(t); clearTimeout(t); }); this._timers = []; }
+
+  // ---------- helpers ----------
+  fmtSize(b){ if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(1)+' K'; return (b/1048576).toFixed(1)+' M'; }
+  fmtNum(x,d){ return (x==null||isNaN(x)) ? '—' : Number(x).toFixed(d); }
+  pct(x){ return (x==null||isNaN(x)) ? '—' : Math.round(x*100)+'%'; }
+  fmtElapsed(s){ const m=Math.floor(s/60), ss=s%60; return String(m).padStart(2,'0')+':'+String(ss).padStart(2,'0'); }
+  stripFence(s){
+    if(typeof s !== 'string') return '';
+    let t = s.trim();
+    const m = t.match(/^```[a-zA-Z]*\s*\n([\s\S]*?)\n?```\s*$/);
+    if(m) return m[1].trim();
+    return t.replace(/^```[a-zA-Z]*\s*/,'').replace(/```\s*$/,'').trim();
+  }
+
+  // ---------- file handling ----------
+  openFileDialog(){ if(this.fileInputRef.current) this.fileInputRef.current.click(); }
+  addFiles(list){
+    const arr = Array.from(list).filter(f => /\.(v|sv)$/i.test(f.name));
+    this.fileObjs = this.fileObjs.concat(arr);
+    this.setState({ fileMeta: this.fileObjs.map(f => ({ name:f.name, size:this.fmtSize(f.size) })) });
+  }
+  onFilePick(e){ this.addFiles(e.target.files); e.target.value=''; }
+  onDragOver(e){ e.preventDefault(); if(this.dropRef.current){ this.dropRef.current.dataset.drag='1'; this.forceUpdate(); } }
+  onDragLeave(e){ e.preventDefault(); if(this.dropRef.current){ this.dropRef.current.dataset.drag=''; this.forceUpdate(); } }
+  onDrop(e){ e.preventDefault(); if(this.dropRef.current) this.dropRef.current.dataset.drag=''; if(e.dataTransfer && e.dataTransfer.files) this.addFiles(e.dataTransfer.files); }
+  removeFile(i){ this.fileObjs.splice(i,1); this.setState({ fileMeta: this.fileObjs.map(f=>({name:f.name,size:this.fmtSize(f.size)})) }); }
+
+  // ---------- inputs ----------
+  onToken(e){ const v=e.target.value; this.setState({token:v}); try{localStorage.setItem('rlhdl_token',v);}catch(_){} }
+  onPrompt(e){ this.setState({prompt:e.target.value}); }
+  onStimulus(e){ this.setState({stimulus:e.target.value}); }
+  onTopOverride(e){ this.setState({topOverride:e.target.value}); }
+  setSia(){ this.setState({mode:'sia'}); }
+  setHarness(){ this.setState({mode:'harness'}); }
+  toggleStimHelp(){ this.setState(s=>({stimHelpOpen:!s.stimHelpOpen})); }
+  toggleAdvanced(){ this.setState(s=>({advancedOpen:!s.advancedOpen})); }
+  toggleEvolve(){ this.setState(s=>({evolveOpen:!s.evolveOpen})); }
+  useExample(){ this.setState({stimulus:this.exampleStim()}); }
+  setAdv(k,v){ this.setState(s=>({adv:Object.assign({},s.adv,{[k]:v})})); }
+  onMaxGen(e){ this.setAdv('max_generations', parseInt(e.target.value)||1); }
+  onNCand(e){ this.setAdv('n_candidates', parseInt(e.target.value)||1); }
+  onTemp(e){ this.setAdv('temperature', parseFloat(e.target.value)||0); }
+  onRepair(e){ this.setAdv('max_repair_rounds', parseInt(e.target.value)||0); }
+  onPatience(e){ this.setAdv('patience', parseInt(e.target.value)||1); }
+  onMetaModel(e){ this.setAdv('meta_model', e.target.value); }
+  onMetaTurns(e){ this.setAdv('meta_max_turns', parseInt(e.target.value)||1); }
+  onMaxTokens(e){ this.setAdv('max_tokens', parseInt(e.target.value)||256); }
+  onNVectors(e){ this.setAdv('n_vectors', parseInt(e.target.value)||1); }
+
+  exampleStim(){
+    return 'task stimulus;\n  integer i;\n  begin\n    rst_n = 0; x = 0; @(posedge clk); #1;\n    rst_n = 1;\n    for (i = 0; i < 16; i = i + 1) begin\n      x = i[7:0]; @(posedge clk); #1; rlhdl_sample;\n    end\n  end\nendtask';
+  }
+
+  // ---------- run lifecycle ----------
+  startTimers(){
+    this._startedAt = Date.now();
+    const tick = setInterval(()=> this.setState({ elapsed: Math.floor((Date.now()-this._startedAt)/1000) }), 1000);
+    this._timers.push(tick);
+  }
+
+  async onLaunch(){
+    if(this.state.demo) return;
+    if(this.fileObjs.length===0){ this.setState({phase:'error',errorCode:'NO FILES',errorDetail:'Add at least one .v / .sv design file before launching.'}); return; }
+    if(!this.state.prompt.trim()){ this.setState({phase:'error',errorCode:'NO PROMPT',errorDetail:'Describe the optimization goal — it becomes the spec shown to the model.'}); return; }
+    if(!this.state.token.trim()){ this.setState({phase:'error',errorCode:'401',errorDetail:'Missing X-RLHDL-Token. Paste your token in the header field.'}); return; }
+
+    this.clearTimers();
+    this.setState({ phase:'submitting', elapsed:0, result:null, norm:null, parse:null, jobId:'' });
+
+    const fd = new FormData();
+    this.fileObjs.forEach(f => fd.append('files', f));
+    fd.append('prompt', this.state.prompt);
+    if(this.state.stimulus.trim()) fd.append('stimulus', this.state.stimulus);
+    if(this.state.topOverride.trim()) fd.append('top_module', this.state.topOverride.trim());
+    fd.append('mode', this.state.mode);
+    const a = this.state.adv;
+    fd.append('n_candidates', a.n_candidates);
+    fd.append('temperature', a.temperature);
+    fd.append('max_repair_rounds', a.max_repair_rounds);
+    fd.append('max_generations', a.max_generations);
+    fd.append('meta_model', a.meta_model);
+    fd.append('meta_max_turns', a.meta_max_turns);
+    fd.append('max_tokens', a.max_tokens);
+    fd.append('n_vectors', a.n_vectors);
+    if(this.state.mode==='harness') fd.append('patience', a.patience);
+
+    try {
+      const res = await fetch(this.state.baseUrl + '/optimize', { method:'POST', headers:{ 'X-RLHDL-Token': this.state.token }, body: fd });
+      if(!res.ok){
+        let detail = '';
+        try { const j = await res.json(); detail = j.detail || JSON.stringify(j,null,2); } catch(_){ detail = await res.text(); }
+        this.setState({ phase:'error', errorCode:String(res.status), errorDetail: detail || 'Request failed.' });
+        return;
+      }
+      const j = await res.json();
+      this.setState({ phase:'running', jobId:j.job_id, parse:{ top_module:j.top_module, clocked:j.clocked, baseline_cells:j.baseline_cells, mode:j.mode||this.state.mode } });
+      this.startTimers();
+      this.poll();
+    } catch(err){
+      this.setState({ phase:'error', errorCode:'NETWORK', errorDetail: String(err && err.message ? err.message : err) });
+    }
+  }
+
+  async poll(){
+    if(this.state.phase!=='running') return;
+    try {
+      const res = await fetch(this.state.baseUrl + '/jobs/' + this.state.jobId, { headers:{ 'X-RLHDL-Token': this.state.token } });
+      const j = await res.json();
+      if(j.status==='running'){
+        const t = setTimeout(()=> this.poll(), 7000); this._timers.push(t);
+      } else if(j.status==='error'){
+        this.clearTimers();
+        this.setState({ phase:'error', errorCode:'JOB ERROR', errorDetail: j.error || 'Job failed.' });
+      } else if(j.status==='done'){
+        this.clearTimers();
+        this.finish(j.result);
+      } else {
+        const t = setTimeout(()=> this.poll(), 7000); this._timers.push(t);
+      }
+    } catch(err){
+      const t = setTimeout(()=> this.poll(), 8000); this._timers.push(t);
+    }
+  }
+
+  finish(result){
+    const mode = (this.state.parse && this.state.parse.mode) || this.state.mode;
+    this.setState({ phase:'done', result, norm: this.normalize(result, mode) });
+  }
+
+  normalize(result, mode){
+    if(!result) return null;
+    if(mode==='harness'){
+      const hist = result.history || [];
+      const lastEquiv = hist.length ? hist[hist.length-1].equivalent : false;
+      return {
+        kind:'harness',
+        rtl: this.stripFence(result.best_rtl),
+        baseline: result.baseline_cells,
+        best: result.best_cells,
+        improvement: result.total_improvement,
+        equivalent: !!lastEquiv,
+        plateaued: result.plateaued,
+        history: hist
+      };
+    }
+    // SIA
+    const parse = this.state.parse || {};
+    const top = parse.top_module;
+    let rtl = '';
+    if(result.best_rtl){
+      if(typeof result.best_rtl === 'string') rtl = result.best_rtl;
+      else rtl = result.best_rtl[top] || Object.values(result.best_rtl)[0] || '';
+    }
+    const gens = result.generations || [];
+    let bestDesign = null;
+    const bestG = gens.find(g => g.gen === result.best_gen);
+    if(bestG && bestG.results && bestG.results.designs && bestG.results.designs.length) bestDesign = bestG.results.designs[0];
+    const diff = (result.artifacts && (result.artifacts['target_agent_gen1_to_gen2.diff'] || Object.entries(result.artifacts).find(([k])=>/\.diff$/.test(k))?.[1])) || '';
+    return {
+      kind:'sia',
+      rtl: this.stripFence(rtl),
+      bestGen: result.best_gen,
+      bestReward: result.best_mean_reward,
+      generations: gens,
+      bestDesign,
+      baseline: bestDesign ? bestDesign.ref_cells : (parse.baseline_cells),
+      best: bestDesign ? bestDesign.cand_cells : null,
+      improvement: bestDesign ? bestDesign.area_improvement : null,
+      equivalent: bestDesign ? !!bestDesign.equivalent : false,
+      diff
+    };
+  }
+
+  onCopy(){
+    const txt = (this.state.norm && this.state.norm.rtl) || '';
+    try { navigator.clipboard.writeText(txt); } catch(_){}
+    this.setState({copyLabel:'COPIED ✓'});
+    const t = setTimeout(()=> this.setState({copyLabel:'COPY'}), 1600); this._timers.push(t);
+  }
+  onDownload(){
+    const txt = (this.state.norm && this.state.norm.rtl) || '';
+    const name = ((this.state.parse && this.state.parse.top_module) || 'design') + '.v';
+    const blob = new Blob([txt], {type:'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+  }
+
+  onReset(){
+    this.clearTimers();
+    this.setState({ phase:'idle', result:null, norm:null, parse:null, jobId:'', elapsed:0, errorCode:'', errorDetail:'', demo:false, evolveOpen:false });
+  }
+
+  // ---------- demo ----------
+  onDemo(){
+    this.clearTimers();
+    this.fileObjs = [];
+    this.setState({
+      demo:true, phase:'submitting',
+      fileMeta:[{name:'mux4.v', size:'1.2 K'}],
+      prompt:'Optimize this 4:1 mux for gate count while preserving behavior.',
+      mode:'sia', elapsed:0, result:null, norm:null, parse:null, jobId:''
+    });
+    const t1 = setTimeout(()=>{
+      this.setState({ phase:'running', jobId:'fc-demo-9a3f', parse:{top_module:'mux4', clocked:false, baseline_cells:60, mode:'sia'} });
+      this.startTimers();
+    }, 900);
+    const t2 = setTimeout(()=>{
+      this.clearTimers();
+      this.setState({ elapsed: 47 });
+      this.finish(this.demoResult());
+    }, 4200);
+    this._timers.push(t1, t2);
+  }
+
+  demoResult(){
+    const rtl = 'module mux4(\n  input  [1:0] sel,\n  input        a, b, c, d,\n  output       y\n);\n  // evolved: collapsed to a single 4:1 select tree\n  assign y = sel[1] ? (sel[0] ? d : c)\n                    : (sel[0] ? b : a);\nendmodule\n';
+    return {
+      returncode:0, best_gen:'gen_1', best_mean_reward:0.8,
+      best_rtl:{ mux4: rtl },
+      generations:[
+        { gen:'gen_1', has_target_agent:true,
+          results:{ mean_reward:0.8, mean_area_improvement:0.6, n_equivalent:1, n_total:1,
+            designs:[{ id:'mux4', reward:0.8, stage:'graded', equivalent:true, ref_cells:60, cand_cells:24, area_improvement:0.6 }] },
+          submission:{ mux4: rtl } },
+        { gen:'gen_2', has_target_agent:true,
+          results:{ mean_reward:0.62, mean_area_improvement:0.42, n_equivalent:1, n_total:1,
+            designs:[{ id:'mux4', reward:0.62, stage:'graded', equivalent:true, ref_cells:60, cand_cells:35, area_improvement:0.42 }] },
+          submission:{ mux4: rtl } }
+      ],
+      artifacts:{ 'target_agent_gen1_to_gen2.diff':
+        '--- a/target_agent.py\n+++ b/target_agent.py\n@@ -18,9 +18,12 @@ def build_prompt(spec):\n-    hints = "Rewrite the module for clarity."\n+    hints = (\n+        "Collapse nested case/if into a balanced select tree. "\n+        "Prefer continuous assigns over procedural always blocks "\n+        "when the logic is purely combinational."\n+    )\n@@ -41,6 +44,8 @@ def grade(candidate):\n-    return area_only(candidate)\n+    # weight equivalence first, then area; reject non-equivalent early\n+    return staged_reward(candidate, equiv_first=True)\n' },
+      stdout_tail:'gen_1 best reward 0.80 (mux4 60->24 cells, equivalent)\n'
+    };
+  }
+
+  // ---------- chart (harness) ----------
+  buildChart(norm){
+    const hist = norm.history || [];
+    if(!hist.length) return null;
+    const W=620, H=190, padL=46, padR=18, padT=18, padB=30;
+    const plotW = W-padL-padR, plotH = H-padT-padB;
+    const cells = hist.map(h=>h.cells);
+    const maxC = Math.max.apply(null, cells.concat([norm.baseline||0]));
+    const n = hist.length;
+    const xAt = i => padL + (n<=1 ? plotW/2 : (i/(n-1))*plotW);
+    const yAt = c => padT + (maxC ? (c/maxC) : 0)*plotH;  // larger cells -> lower y (top); smaller -> bottom
+    const pts = hist.map((h,i)=>({ x:xAt(i), y:yAt(h.cells), cells:h.cells, gen:h.gen, eq:h.equivalent }));
+    const poly = pts.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
+    const baseY = yAt(norm.baseline||maxC);
+    const ce = React.createElement;
+    const ax = '#1d4530';
+    const gridLines = [0,0.5,1].map((f,i)=> ce('line',{key:'g'+i, x1:padL, x2:W-padR, y1:padT+f*plotH, y2:padT+f*plotH, stroke:ax, strokeWidth:1, strokeDasharray:'2 4'}));
+    const yLabels = [
+      ce('text',{key:'yl0', x:padL-8, y:padT+4, fill:'#4f7a64', fontSize:9, textAnchor:'end'}, String(maxC)),
+      ce('text',{key:'yl1', x:padL-8, y:H-padB+3, fill:'#4f7a64', fontSize:9, textAnchor:'end'}, '0')
+    ];
+    const baseLine = ce('line',{key:'base', x1:padL, x2:W-padR, y1:baseY, y2:baseY, stroke:'#4f7a64', strokeWidth:1, strokeDasharray:'5 4'});
+    const baseTxt = ce('text',{key:'baset', x:W-padR, y:baseY-5, fill:'#4f7a64', fontSize:9, textAnchor:'end'}, 'baseline '+(norm.baseline));
+    const line = ce('polyline',{key:'line', points:poly, fill:'none', stroke:'var(--accent)', strokeWidth:2});
+    const dots = pts.map((p,i)=>[
+      ce('circle',{key:'c'+i, cx:p.x, cy:p.y, r:4, fill: p.eq ? 'var(--accent-bright)' : '#e87a66', stroke:'#05100b', strokeWidth:2}),
+      ce('text',{key:'ct'+i, x:p.x, y:p.y-9, fill:'#c2ead5', fontSize:10, textAnchor:'middle', fontWeight:600}, String(p.cells)),
+      ce('text',{key:'cx'+i, x:p.x, y:H-padB+15, fill:'#4f7a64', fontSize:9, textAnchor:'middle'}, 'g'+p.gen)
+    ]);
+    return ce('svg',{viewBox:'0 0 '+W+' '+H, width:'100%', style:{display:'block', maxHeight:'220px'}},
+      gridLines, yLabels, baseLine, baseTxt, line, [].concat.apply([],dots));
+  }
+
+  renderVals(){
+    const s = this.state;
+    const phase = s.phase;
+    const norm = s.norm;
+    const accentVar = 'var(--accent)';
+
+    // status pill
+    const statusMap = {
+      idle:   ['IDLE', 'var(--faint)', 'none'],
+      submitting:['SUBMITTING', 'var(--amber)', 'pulse 1s infinite'],
+      running:['RUNNING', 'var(--accent)', 'pulse 1.2s infinite'],
+      done:   ['DONE', 'var(--accent-bright)', 'none'],
+      error:  ['ERROR', 'var(--red)', 'pulse 1s infinite']
+    };
+    const st = statusMap[phase] || statusMap.idle;
+
+    // mode button styling
+    const sia = s.mode==='sia';
+    const har = s.mode==='harness';
+
+    // gen rows (SIA)
+    let genRows = [];
+    if(norm && norm.kind==='sia'){
+      genRows = (norm.generations||[]).map(g=>{
+        const r = g.results||{};
+        const d = (r.designs && r.designs[0]) || {};
+        const isBest = g.gen === norm.bestGen;
+        return {
+          gen: g.gen,
+          bestTag: isBest ? '  ◆ best' : '',
+          gColor: isBest ? 'var(--accent-bright)' : 'var(--text)',
+          rowBg: isBest ? 'rgba(55,217,138,.07)' : 'transparent',
+          reward: this.fmtNum(r.mean_reward,2),
+          cellsTxt: (d.cand_cells!=null ? (d.ref_cells+' → '+d.cand_cells) : '—'),
+          equiv: (r.n_equivalent!=null ? (r.n_equivalent+'/'+r.n_total) : '—'),
+          equivColor: (r.n_equivalent===r.n_total && r.n_total>0) ? 'var(--accent)' : 'var(--red)',
+          area: this.pct(r.mean_area_improvement)
+        };
+      });
+    }
+
+    // chart (harness)
+    let chartEl = null;
+    if(norm && norm.kind==='harness') chartEl = this.buildChart(norm);
+
+    // summary numbers
+    let cellsBaseline='—', cellsBest='—', cellsPct='', equivText='—', equivColor='var(--muted)', equivBorder='var(--line-2)', equivBg='var(--bg-1)';
+    if(norm){
+      cellsBaseline = norm.baseline!=null ? String(norm.baseline) : '—';
+      cellsBest = norm.best!=null ? String(norm.best) : '—';
+      if(norm.improvement!=null) cellsPct = '−'+Math.round(norm.improvement*100)+'%';
+      if(norm.equivalent){ equivText='EQUIVALENT ✓'; equivColor='var(--accent-bright)'; equivBorder='var(--accent-dim)'; equivBg='rgba(55,217,138,.06)'; }
+      else { equivText='NOT EQUIVALENT'; equivColor='var(--red)'; equivBorder='var(--red)'; equivBg='rgba(232,122,102,.06)'; }
+    }
+
+    const pipeline = [
+      {tag:'01', name:'UPLOAD', arrow:true},
+      {tag:'02', name:'PARSE', arrow:true},
+      {tag:'03', name:'OPTIMIZE', arrow:true},
+      {tag:'04', name:'VERIFY', arrow:false}
+    ];
+
+    const files = s.fileMeta.map((f,i)=> ({ name:f.name, size:f.size, remove: ()=> this.removeFile(i) }));
+
+    return {
+      // refs
+      rootRef:this.rootRef, gridRef:this.gridRef, scanRef:this.scanRef, dropRef:this.dropRef,
+      fileInputRef:this.fileInputRef, chartHostRef:this.chartHostRef,
+
+      // header
+      token:s.token, baseUrl:s.baseUrl,
+      tokenBorder: s.token.trim() ? 'var(--accent-dim)' : 'var(--line-2)',
+      statusLabel:st[0], statusColor:st[1], statusAnim:st[2],
+      onToken:(e)=>this.onToken(e), onDemo:()=>this.onDemo(),
+
+      // files
+      files, hasFiles: files.length>0,
+      fileCountLabel: files.length ? (files.length+' file'+(files.length>1?'s':'')) : 'none',
+      openFileDialog:()=>this.openFileDialog(), onFilePick:(e)=>this.onFilePick(e),
+      onDragOver:(e)=>this.onDragOver(e), onDragLeave:(e)=>this.onDragLeave(e), onDrop:(e)=>this.onDrop(e),
+      dropBorder: (this.dropRef.current && this.dropRef.current.dataset.drag) ? 'var(--accent)' : 'var(--line-2)',
+      dropBg: (this.dropRef.current && this.dropRef.current.dataset.drag) ? 'rgba(55,217,138,.06)' : 'var(--inset)',
+
+      // testbench
+      stimulus:s.stimulus, onStimulus:(e)=>this.onStimulus(e),
+      stimHelpOpen:s.stimHelpOpen, toggleStimHelp:()=>this.toggleStimHelp(),
+      stimHelpLabel: s.stimHelpOpen ? '× hide help' : '? help & example',
+      exampleStim:this.exampleStim(), useExample:()=>this.useExample(),
+
+      // prompt
+      prompt:s.prompt, onPrompt:(e)=>this.onPrompt(e),
+
+      // mode
+      setSia:()=>this.setSia(), setHarness:()=>this.setHarness(),
+      siaBg: sia?'rgba(55,217,138,.08)':'var(--inset)', siaBorder: sia?'var(--accent)':'var(--line-2)', siaColor: sia?'var(--accent-bright)':'var(--text)',
+      harBg: har?'rgba(55,217,138,.08)':'var(--inset)', harBorder: har?'var(--accent)':'var(--line-2)', harColor: har?'var(--accent-bright)':'var(--text)',
+      isHarness: har, isSia: sia,
+
+      // advanced
+      advancedOpen:s.advancedOpen, toggleAdvanced:()=>this.toggleAdvanced(),
+      advChevron: s.advancedOpen?'[ − ]':'[ + ]',
+      adv:s.adv, topOverride:s.topOverride,
+      onMaxGen:(e)=>this.onMaxGen(e), onNCand:(e)=>this.onNCand(e), onTemp:(e)=>this.onTemp(e),
+      onRepair:(e)=>this.onRepair(e), onPatience:(e)=>this.onPatience(e), onMetaModel:(e)=>this.onMetaModel(e),
+      onMetaTurns:(e)=>this.onMetaTurns(e), onTopOverride:(e)=>this.onTopOverride(e),
+      onMaxTokens:(e)=>this.onMaxTokens(e), onNVectors:(e)=>this.onNVectors(e),
+      genLabel: sia ? 'generations (max_generations)' : 'flywheel iterations (max_generations)',
+
+      // launch
+      showSiaWarn: sia && (s.adv.max_generations>2 || s.adv.n_candidates>4),
+      onLaunch:()=>this.onLaunch(),
+      launchDisabled: (phase==='submitting'||phase==='running'),
+      launchLabel: phase==='submitting' ? 'SUBMITTING…' : phase==='running' ? 'RUNNING…' : '▶  LAUNCH OPTIMIZATION',
+      launchBg: (phase==='submitting'||phase==='running') ? 'var(--inset)' : 'transparent',
+      launchColor: (phase==='submitting'||phase==='running') ? 'var(--muted)' : 'var(--accent)',
+
+      // phases
+      isIdle: phase==='idle',
+      isBusy: phase==='submitting' || phase==='running',
+      isError: phase==='error',
+      isDone: phase==='done',
+      pipeline,
+
+      // parse echo
+      hasParse: !!s.parse && (phase==='running'||phase==='done'),
+      parse: s.parse || {top_module:'',clocked:false,baseline_cells:''},
+      clockedLabel: s.parse ? (s.parse.clocked ? 'CLOCKED' : 'COMBINATIONAL') : '',
+      parseModeU: s.parse ? String(s.parse.mode||'').toUpperCase() : '',
+      jobShort: s.jobId ? (s.jobId.length>14 ? s.jobId.slice(0,14)+'…' : s.jobId) : '—',
+
+      // busy
+      busyTitle: phase==='submitting' ? 'UPLOADING & PARSING' : 'OPTIMIZING',
+      busySub: phase==='submitting' ? 'pre-flight equivalence check (design vs itself)' : (s.mode==='sia' ? 'meta-agent evolving target across generations' : 'iterative refine + grade'),
+      elapsedFmt: this.fmtElapsed(s.elapsed),
+      expectedWindow: s.mode==='sia' ? '10–15 min' : '1–3 min',
+
+      // error
+      errorCode: s.errorCode, errorDetail: s.errorDetail,
+
+      // done summary
+      equivText, equivColor, equivBorder, equivBg,
+      cellsBaseline, cellsBest, cellsPct,
+      hasReward: !!(norm && norm.kind==='sia'),
+      bestReward: norm && norm.bestReward!=null ? this.fmtNum(norm.bestReward,2) : '—',
+      bestGenLabel: norm && norm.bestGen ? norm.bestGen : '',
+
+      isSiaResult: !!(norm && norm.kind==='sia'),
+      isHarnessResult: !!(norm && norm.kind==='harness'),
+      genRows,
+      chartEl,
+
+      refinedRtl: (norm && norm.rtl) || '',
+      onCopy:()=>this.onCopy(), onDownload:()=>this.onDownload(), copyLabel:s.copyLabel,
+
+      hasDiff: !!(norm && norm.kind==='sia' && norm.diff),
+      diffText: norm && norm.diff ? norm.diff : '',
+      evolveOpen:s.evolveOpen, toggleEvolve:()=>this.toggleEvolve(),
+      evolveChevron: s.evolveOpen?'[ − ]':'[ + ]',
+
+      onReset:()=>this.onReset()
+    };
+  }
+}
+</script>
+</body>
+</html>

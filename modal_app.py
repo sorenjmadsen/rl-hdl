@@ -195,7 +195,8 @@ def optimize_remote(task, model: str, n_candidates: int, temperature: float,
 
 @app.function(image=harness_image, secrets=[modal.Secret.from_name("fireworks-api")], timeout=3600)
 def flywheel_remote(task, model: str, n_candidates: int, temperature: float,
-                    max_repair_rounds: int, max_generations: int, patience: int) -> dict:
+                    max_repair_rounds: int, max_generations: int, patience: int,
+                    max_tokens: int = 4096) -> dict:
     """Run the single-design flywheel on one design until its gate count plateaus.
 
     Sampling (Fireworks) + equivalence (Verilator) + PPA (Yosys) all in-container,
@@ -222,7 +223,7 @@ def flywheel_remote(task, model: str, n_candidates: int, temperature: float,
     res = run_flywheel(task, model_fn=model_fn, config=FlywheelConfig(
         max_generations=max_generations, patience=patience,
         harness=HarnessConfig(n_candidates=n_candidates, temperature=temperature,
-                              max_repair_rounds=max_repair_rounds),
+                              max_repair_rounds=max_repair_rounds, max_tokens=max_tokens),
     ))
     return {
         "task_id": res.task_id,
@@ -309,6 +310,8 @@ def web():
         patience: int = Form(3),                  # harness mode only
         meta_model: str = Form("sonnet"),         # SIA meta/feedback agent (Claude)
         meta_max_turns: int = Form(60),           # SIA mode only
+        max_tokens: int = Form(4096),             # per-sample generation budget
+        n_vectors: int = Form(256),               # equivalence vectors (combinational designs)
         model: str = Form(DEFAULT_MODEL),         # target policy (Fireworks)
         files: list[UploadFile] = File(...),
         x_rlhdl_token: str | None = Header(default=None),
@@ -320,6 +323,7 @@ def web():
         try:
             task = task_from_upload(
                 sources, prompt=prompt, stimulus=stimulus, top_module=top_module,
+                n_vectors=n_vectors,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -344,18 +348,19 @@ def web():
                 "stimulus": stimulus,
                 "top_module": top_module or task.top_module,
                 "prompt": prompt,
-                "n_vectors": task.n_vectors,
+                "n_vectors": n_vectors,
                 "seed": task.seed,
             }
             sia = modal.Function.from_name("rl-hdl-sia", "sia_run_remote")
             call = sia.spawn(
                 max_generations, int(time.time()), model, meta_model,
                 n_candidates, temperature, max_repair_rounds, meta_max_turns, upload,
+                max_tokens,
             )
         else:
             call = flywheel_remote.spawn(
                 task, model, n_candidates, temperature,
-                max_repair_rounds, max_generations, patience,
+                max_repair_rounds, max_generations, patience, max_tokens,
             )
 
         return {
