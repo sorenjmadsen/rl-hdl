@@ -10,13 +10,10 @@ yarn-error.log*
 
 # Python
 __pycache__/
+*.py[cod]
 *.egg-info/
 .venv/
 .pytest_cache/
-
-# HDL sim artifacts
-*.vvp
-dump.vcd
 
 # Build output
 dist/
@@ -28,9 +25,16 @@ build/
 .vscode/
 .idea/
 
-# HDL build artifacts
+# HDL / sim / build artifacts
 *.vcd
 *.vvp
 *.out
+obj_dir/
 work/
+rlhdl_*/
+
+# generated eval output
+baseline.json
+
+# gstack
 .gstack/

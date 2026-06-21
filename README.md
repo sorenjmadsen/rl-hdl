@@ -1,72 +1,129 @@
-# Cologic — self-learning chip-design agent
+# rl-hdl
 
-RL for teaching hardware design languages. An agent generates RTL, an isolated sandbox
-compiles + simulates it, and a **verifiable reward** scores the result. Those rewards
-drive an RLVR loop, so the model gets measurably better each epoch.
+An **RL-with-verifiable-rewards (RLVR) environment** that teaches an LLM to
+generate correct hardware (Verilog/RTL) from a spec. The reward comes from
+**real silicon tooling — the Verilator simulator — not an LLM judge**. Hardware
+computes the right function or it doesn't, so the grade physically cannot be faked.
 
-This repo currently contains the **verifiable-reward core** — the part everything else
-(Modal sandboxes, Fireworks fine-tuning, the Cologic visualizer) wraps around.
+See [docs/BRIEF.md](docs/BRIEF.md) for the full project brief, scope, and the
+locked design decisions.
+
+## How grading works
+
+The reward seam both the verifier (CPU) and trainer (GPU) build against:
+
+```python
+grade(completion: str, task: Task) -> GradeResult(reward: float, info: dict)
+```
+
+Each `Task` carries a natural-language spec, an interface, and a **golden
+reference** Verilog module. `grade()`:
+
+1. Extracts the candidate module from the model's (often messy) output.
+2. Builds a SystemVerilog testbench that instantiates the candidate **and** the
+   golden reference, drives the same random input vectors into both, and counts
+   matching output comparisons.
+3. Compiles everything with `verilator --binary --timing` and runs it.
+
+Reward is correctness-dominant and **dense** (no bare pass/fail):
+
+| Outcome | Reward |
+|---|---|
+| No extractable module | `0.00` |
+| Extracted, won't compile | `0.05` |
+| Compiles but sim errors | `0.05` |
+| Compiles + runs | `0.10 + 0.90 · (matching comparisons / total)` |
+
+Comparing against a golden reference (rather than hand-authored expected values)
+makes the reward dense for free and makes held-out reward-hacking checks trivial:
+just reseed the random vectors.
+
+## Tasks
+
+`rl_hdl/tasks.py` ships training tasks, held-out tasks, and converted
+verified-gradient tasks:
+
+- **`TRAIN_TASKS`**: mux2, mux4, add4, cmp8, alu8, dec3to8, popcount8, shl8,
+  absdiff8, bin2gray8.
+- **`HELDOUT_TASKS`**: perturbed variants — widened/narrowed, renamed ports
+  and modules, recombined functions, and an inverse (gray→bin). These give
+  the **headline** metric: warm-start models may have seen public benchmarks, so
+  the gain is measured on structurally novel tasks.
+- **`GRADIENT_TASKS`**: clocked TPU-like matrix-multiply tasks distilled
+  from real verified gradients in `YashKarthik/tpu`. One checks that repeated
+  matrix multiplies do not reuse stale accumulator state; the other checks signed
+  matrix elements and output-select control.
+
+The repo also includes a documented seed mining corpus in
+`data/verified_gradients.jsonl`, with reproducible provenance for real-repo RTL
+gradients and links from mined gradients to the native `rl-hdl` tasks converted
+from them.
+
+Every task's golden reference is smoke-tested to self-grade to `1.0`, which
+catches a malformed reference before it can poison training.
+
+## Baseline eval (Modal)
+
+The zero-shot `pass@1` on the held-out split is the floor's headline number and
+the demo's red/green source of truth. Both grading **and** inference run in Modal
+containers — grading fans out with `.map` (one cached Verilator build), and
+Fireworks sampling reads the key from a Modal Secret — so `modal run` works from
+any Python env without local deps.
+
+One-time setup of the Fireworks secret:
+
+```bash
+modal secret create fireworks-api FIREWORKS_API_KEY=...
+```
+
+```bash
+# End-to-end check of the Modal grader — no API key, goldens should hit pass@1 = 1.0
+modal run modal_app.py::main --selftest --split heldout
+
+# Zero-shot baseline. RLHDL_MODEL picks the Fireworks model / deployment id.
+RLHDL_MODEL=accounts/<acct>/deployments/<id> modal run modal_app.py::main --split heldout --n 5
+modal run modal_app.py::main --split train --n 1
+
+# List Fireworks models the account can reach
+modal run modal_app.py::models --substr coder
+
+# Grading throughput (grades/sec through the parallel grader)
+modal run modal_app.py::bench --total 256
+```
+
+(`::main` is required because the app has multiple entrypoints — Modal won't
+auto-pick one.)
+
+Output is a per-task table (`pass`, `mean_reward`), an aggregate `pass@1`, and a
+`baseline.json`. `mean_reward` is the dense signal — watch it move before
+`pass@1` does. The same `evaluate()` runs in-process via `rl_hdl.eval` for quick
+local iteration without Modal.
+
+## Layout
 
 ```
-cologic/                 the harness
-  reward.py              evaluate() — compile + sim + score  ← the core
-  vcd.py                 toggle/latency proxies from the VCD
-  __main__.py            CLI
-examples/systolic_array/ a real, golden-checked RTL task
-tests/                   runnable checks
+rl_hdl/
+  schema.py     # Task + GradeResult (the locked seam)
+  extract.py    # robust Verilog module extraction from LLM output
+  verifier.py   # grade() — Verilator-grounded dense reward
+  tasks.py      # TRAIN_TASKS + HELDOUT_TASKS (+ golden references)
+  prompt.py     # Task -> chat messages for the policy model
+  inference.py  # Fireworks (OpenAI-compatible) sampling
+  eval.py       # pass@1 / mean-reward aggregation (grader-agnostic)
+modal_app.py    # Modal image (Verilator) + parallel grader + baseline entrypoint
+tests/
+  test_verifier.py
+  test_eval.py
+docs/
+  BRIEF.md      # full project brief
 ```
 
 ## Setup
 
-```bash
-brew install icarus-verilog          # or: apt install iverilog
-pip install -e .                     # core is stdlib-only; iverilog is the real dep
-```
-
-## Run it
+Requires [Verilator](https://verilator.org) on `PATH` (`brew install verilator`).
 
 ```bash
-python -m cologic "examples/systolic_array/*.v" --top tb
+uv venv
+uv pip install -e ".[dev]"
+uv run pytest -q
 ```
-
-```json
-{ "compiles": true, "sim_passed": true, "toggles": 145,
-  "sim_time": 156000, "reward": 1.0, ... }
-```
-
-Or from Python — this is the function the RL loop calls per rollout:
-
-```python
-from cologic import evaluate
-r = evaluate(["gen/design.v", "gen/tb.v"], top="tb")
-r.reward         # 0.0 unless it compiles AND the testbench prints PASS
-```
-
-## The reward
-
-| Signal         | Meaning                          | Source              |
-|----------------|----------------------------------|---------------------|
-| `compiles`     | hard gate                        | iverilog exit 0     |
-| `sim_passed`   | hard gate (testbench prints PASS)| vvp stdout          |
-| `toggles`      | dynamic-power proxy (lower=better)| VCD value-changes  |
-| `sim_time`     | latency/compute proxy (lower=better)| VCD last timestamp |
-| `timing_slack` | **not wired** — needs synthesis  | (yosys + OpenSTA)   |
-
-`reward` is `0.0` unless it both compiles and passes. Pass a `--baseline` JSON of
-`{toggles, sim_time}` to get a **relative** reward (1.0 == baseline, >1 better) — that's
-the signal that rewards a clock-gated or fewer-cycle variant over the previous best.
-
-**Writing a task:** give the harness a DUT plus a self-checking testbench that prints
-`PASS` on success and `FAIL` (or a mismatch) otherwise. See `examples/systolic_array/`.
-
-## Test
-
-```bash
-pytest -q          # sim tests auto-skip if iverilog isn't installed
-```
-
-## Not built yet (handoff)
-
-- **Modal sandbox** — run `evaluate()` in a spawnable sandbox per rollout (`sandbox.py`).
-- **Fireworks loop** — serve the model, feed `reward` back as the RLVR signal.
-- **Timing closure** — synth with yosys + OpenSTA to get a real `timing_slack` gate.
