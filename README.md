@@ -8,6 +8,8 @@ computes the right function or it doesn't, so the grade physically cannot be fak
 See [docs/BRIEF.md](docs/BRIEF.md) for the full project brief, scope, and the
 locked design decisions.
 
+For the hackathon presentation path, use [docs/demo_runbook.md](docs/demo_runbook.md).
+
 ## How grading works
 
 The reward seam both the verifier (CPU) and trainer (GPU) build against:

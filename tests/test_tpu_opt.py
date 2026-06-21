@@ -16,8 +16,8 @@ Tiers:
 
 from __future__ import annotations
 
-import re
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -65,14 +65,18 @@ def test_broken_rewrite_differs_from_baseline():
 
 @needs_yosys
 def test_baseline_area_is_computable_and_headroom_exists():
-    """On Yosys, the baseline synthesizes and carries multiple un-shared MAC units —
-    the resource-sharing headroom the optimizer is meant to find is really there."""
+    """On Yosys, the baseline synthesizes and the recorded loop winner is smaller.
+
+    Do not assert internal `$mul`/`$macc` names: newer Yosys versions summarize
+    post-synth cells differently. The invariant that matters for the demo is the
+    measured headroom after the same synth recipe.
+    """
     area = synth_cells(TPU_MATMUL_BASELINE, tpu_matmul.top_module)
-    assert area.cells > 0
-    # The 2x2 matmul instantiates several multiplier/MAC cells before sharing; the
-    # un-optimized baseline should show more than one in the synth log.
-    macc = re.findall(r"\$(?:mul|macc\w*)\b", area.log)
-    assert len(macc) >= 1  # at least one multiply/MAC structure is present pre-share
+    optimized = synth_cells(
+        Path("docs/tpu_matmul_optimization/after.v").read_text(encoding="utf-8"),
+        tpu_matmul.top_module,
+    )
+    assert area.cells > optimized.cells > 0
     # And the graded baseline reports a real cell count via the PPA path.
     r = grade(TPU_MATMUL_BASELINE, tpu_matmul)
     assert r.info["stage"] == "graded"

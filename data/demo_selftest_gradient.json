@@ -1,0 +1,68 @@
+{
+  "model": "selftest-golden",
+  "n_per_task": 1,
+  "pass_at_1": 1.0,
+  "mean_reward": 1.0,
+  "per_task": [
+    {
+      "task_id": "vg_tpu_repeated_matmul2x2",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    },
+    {
+      "task_id": "vg_tpu_signed_outputs2x2",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    },
+    {
+      "task_id": "vg_npu_int34_to_fp32",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    },
+    {
+      "task_id": "vg_tpu_pe_accum_clear",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    },
+    {
+      "task_id": "vg_npu_mac_int8",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    },
+    {
+      "task_id": "vg_npu_find_leading_one64",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    }
+  ]
+}

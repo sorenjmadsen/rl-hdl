@@ -1,0 +1,68 @@
+{
+  "model": "accounts/sorenmadsen/deployments/cologic-qwen3-rft",
+  "n_per_task": 1,
+  "pass_at_1": 0.0,
+  "mean_reward": 0.06067716666666667,
+  "per_task": [
+    {
+      "task_id": "ho_mux2_w16",
+      "n": 1,
+      "n_pass": 0,
+      "pass_rate": 0.0,
+      "mean_reward": 0.05,
+      "rewards": [
+        0.05
+      ]
+    },
+    {
+      "task_id": "ho_cmp4",
+      "n": 1,
+      "n_pass": 0,
+      "pass_rate": 0.0,
+      "mean_reward": 0.05,
+      "rewards": [
+        0.05
+      ]
+    },
+    {
+      "task_id": "ho_popcount16",
+      "n": 1,
+      "n_pass": 0,
+      "pass_rate": 0.0,
+      "mean_reward": 0.05,
+      "rewards": [
+        0.05
+      ]
+    },
+    {
+      "task_id": "ho_max2",
+      "n": 1,
+      "n_pass": 0,
+      "pass_rate": 0.0,
+      "mean_reward": 0.05,
+      "rewards": [
+        0.05
+      ]
+    },
+    {
+      "task_id": "ho_dec2to4",
+      "n": 1,
+      "n_pass": 0,
+      "pass_rate": 0.0,
+      "mean_reward": 0.05,
+      "rewards": [
+        0.05
+      ]
+    },
+    {
+      "task_id": "ho_gray2bin8",
+      "n": 1,
+      "n_pass": 0,
+      "pass_rate": 0.0,
+      "mean_reward": 0.114063,
+      "rewards": [
+        0.114063
+      ]
+    }
+  ]
+}

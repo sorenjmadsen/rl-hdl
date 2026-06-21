@@ -1,0 +1,68 @@
+{
+  "model": "accounts/fireworks/models/kimi-k2p7-code",
+  "n_per_task": 1,
+  "pass_at_1": 1.0,
+  "mean_reward": 1.0,
+  "per_task": [
+    {
+      "task_id": "ho_mux2_w16",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    },
+    {
+      "task_id": "ho_cmp4",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    },
+    {
+      "task_id": "ho_popcount16",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    },
+    {
+      "task_id": "ho_max2",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    },
+    {
+      "task_id": "ho_dec2to4",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    },
+    {
+      "task_id": "ho_gray2bin8",
+      "n": 1,
+      "n_pass": 1,
+      "pass_rate": 1.0,
+      "mean_reward": 1.0,
+      "rewards": [
+        1.0
+      ]
+    }
+  ]
+}
