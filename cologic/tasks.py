@@ -595,6 +595,116 @@ module tb;
 endmodule
 """
 
+NPU_INT34_TO_FP32_TB = r"""
+// auto-generated testbench for task __TASK_ID__
+module tb;
+  logic [33:0] int34;
+  wire [31:0] fp32__c, fp32__r;
+
+  __DUT__ dut_c (.int34(int34), .fp32(fp32__c));
+  __REF__ dut_r (.int34(int34), .fp32(fp32__r));
+
+  integer passed = 0;
+  integer total = 0;
+  integer i;
+  integer unused;
+
+  task check(input [33:0] value);
+    begin
+      int34 = value;
+      #1;
+      total += 1;
+      if (fp32__c === fp32__r) begin
+        passed += 1;
+      end else begin
+        $display("MISMATCH int34=0x%h candidate=0x%h reference=0x%h",
+                 value, fp32__c, fp32__r);
+      end
+      #1;
+    end
+  endtask
+
+  initial begin
+    unused = $urandom(__SEED__);
+
+    check(34'h000000000); // 0
+    check(34'h000000001); // 1
+    check(34'h000000002); // 2
+    check(34'h000000003); // 3
+    check(34'h3ffffffff); // -1
+    check(34'h3fffffffe); // -2
+    check(34'h001000000); // 2^24
+    check(34'h001000001); // rounding boundary
+    check(34'h001ffffff); // rounding carry pressure
+    check(34'h1ffffffff); // max positive signed 34-bit value
+    check(34'h200000000); // min negative signed 34-bit value
+    check(34'h2aaaaaaaa); // negative non-power-of-two pattern
+
+    for (i = 0; i < __N_VECTORS__; i = i + 1) begin
+      check({$urandom, $urandom} & 34'h3ffffffff);
+    end
+
+    $display("RESULT %0d %0d", passed, total);
+    $finish;
+  end
+endmodule
+"""
+
+NPU_INT34_TO_FP32_REF = r"""
+module npu_int34_to_fp32(
+    input  wire [33:0] int34,
+    output reg  [31:0] fp32
+);
+    integer idx;
+    integer msb;
+    integer shift;
+    reg sign;
+    reg [7:0] exponent;
+    reg [22:0] mantissa;
+    reg [34:0] abs_value;
+    reg [34:0] rounded_value;
+    reg [34:0] normalized;
+
+    always @(*) begin
+        sign = int34[33];
+        abs_value = sign ? {1'b0, (~int34 + 34'd1)} : {1'b0, int34};
+        exponent = 8'd0;
+        mantissa = 23'd0;
+        msb = 0;
+        shift = 0;
+        rounded_value = 35'd0;
+        normalized = 35'd0;
+
+        if (abs_value == 35'd0) begin
+            fp32 = 32'h00000000;
+        end else begin
+            for (idx = 0; idx < 34; idx = idx + 1) begin
+                if (abs_value[idx]) begin
+                    msb = idx;
+                end
+            end
+
+            if (msb <= 23) begin
+                normalized = abs_value << (23 - msb);
+                mantissa = normalized[22:0];
+            end else begin
+                shift = msb - 23;
+                rounded_value = abs_value + (35'd1 << (shift - 1));
+                if (rounded_value[msb + 1]) begin
+                    msb = msb + 1;
+                    shift = shift + 1;
+                end
+                normalized = rounded_value >> shift;
+                mantissa = normalized[22:0];
+            end
+
+            exponent = 8'd127 + msb[7:0];
+            fp32 = {sign, exponent, mantissa};
+        end
+    end
+endmodule
+"""
+
 GRADIENT_TASKS: list[Task] = [
     Task(
         task_id="vg_tpu_repeated_matmul2x2",
@@ -658,6 +768,25 @@ GRADIENT_TASKS: list[Task] = [
         testbench_template=TPU_SIGNED_OUTPUT_TB,
         allow_extra_modules=True,
         tags=["clocked", "verified-gradient", "tpu", "systolic-array", "signed", "matmul"],
+    ),
+    Task(
+        task_id="vg_npu_int34_to_fp32",
+        top_module="npu_int34_to_fp32",
+        spec=(
+            "Implement a combinational converter from a signed 34-bit two's "
+            "complement integer `int34` to the IEEE-754 single-precision FP32 "
+            "bit pattern on `fp32`. Output positive zero for input zero. For "
+            "nonzero inputs, set the sign bit from the integer sign, normalize "
+            "the absolute value, set the biased exponent, and produce the 23-bit "
+            "fraction. When more than 24 significant bits are present, round by "
+            "adding half of the discarded range before taking the fraction."
+        ),
+        interface=[Port("int34", "input", 34), Port("fp32", "output", 32)],
+        reference_rtl=NPU_INT34_TO_FP32_REF,
+        n_vectors=96,
+        seed=64,
+        testbench_template=NPU_INT34_TO_FP32_TB,
+        tags=["comb", "verified-gradient", "npu", "mac", "fp32", "conversion"],
     ),
 ]
 

@@ -49,10 +49,9 @@ verified-gradient tasks:
   and modules, recombined functions, and an inverse (gray→bin). These give
   the **headline** metric: warm-start models may have seen public benchmarks, so
   the gain is measured on structurally novel tasks.
-- **`GRADIENT_TASKS`**: clocked TPU-like matrix-multiply tasks distilled
-  from real verified gradients in `YashKarthik/tpu`. One checks that repeated
-  matrix multiplies do not reuse stale accumulator state; the other checks signed
-  matrix elements and output-select control.
+- **`GRADIENT_TASKS`**: tasks distilled from real verified gradients in
+  accelerator repos. They cover repeated TPU matrix multiply, signed output
+  selection, and an NPU MAC-path integer-to-FP32 conversion bug.
 
 The repo also includes a documented seed mining corpus in
 `data/verified_gradients.jsonl`, with reproducible provenance for real-repo RTL

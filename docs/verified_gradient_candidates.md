@@ -26,6 +26,7 @@ Local tool notes:
 | verified | `YashKarthik/tpu` | commit `4c2fad9a000ac87c1636c6a923cf577f838af486` | Integrated TPU feeder/control fix: test-only fails and gold passes, but the parent's old test was already failing. Useful lower-confidence repair gradient. |
 | verified | `YashKarthik/tpu` | commit `6cffeff0b1fb340a6352761a94b9570414eb1953` | Working systolic-array commit: test-only fails and gold passes, but parent old test was already failing. Useful as source mining, weaker as eval. |
 | verified | `YashKarthik/tpu` | commit `f4ea139d6486f242dc2f59183c7bc47d053d06cb` | Early TPU test/RTL repair: test-only times out and gold passes, but parent old test was already failing. Lower-confidence. |
+| verified | `thousrm/universal_NPU-CNN_accelerator` | PR #64, `ec3b1eae14e6cbd6ecc8d61bab7dbfa36828299b` | Behavioral NPU/MAC converter gradient: parent converter fails int34-to-FP32 tests, gold passes. Converted into native dense reward task. |
 | verified | `vortexgpgpu/vortex` | commits `196c4e5`, `086d26b`, `47edf04`, `4380ad5` | Verilator-reconstructed CP/control-plane compile/interface gradients. Good GPU/accelerator repo story, but weaker than TPU behavioral tasks. |
 | gold_still_fails / base_already_passes | `vortexgpgpu/vortex` | TCU/FEDP DRL/TFR/BHF commits | Free Verilator + SoftFloat/HardFloat path is runnable, but the tested tensor/FEDP candidates did not produce gold-pass behavioral gradients. |
 | base_already_passes | `YashKarthik/tpu` | PR #5, `291f0b4f9d324f4a58f6d01b6109c7b17661927f` | Test change does not expose a failing behavior on the base; it is a latency/done cleanup, not a correctness gradient. |
@@ -452,7 +453,60 @@ Notes:
 ## Evaluated: thousrm/universal_NPU-CNN_accelerator
 
 - Repo: https://github.com/thousrm/universal_NPU-CNN_accelerator
-- Candidate tried: commit `1918fc242bb80045734b882f8b93980b89c4f05a`, `fix fp32 adder & design find_max`
+
+### Verified: PR #64, `ec3b1eae14e6cbd6ecc8d61bab7dbfa36828299b`
+
+- Title: `complete designing fp32 converter`
+- Base SHA: `f91c413bbd47e9463113ac42bc1000c63e55cfa2`
+- Gold SHA: `ec3b1eae14e6cbd6ecc8d61bab7dbfa36828299b`
+- Test file: `npu_v2/TB/MAC/tb_mac_fp32_converter.sv`
+- Gold RTL file: `npu_v2/RTL/MAC/mac_fp32_converter.sv`
+
+Command run:
+
+```sh
+unset VERILATOR_ROOT
+cd npu_v2
+verilator --binary --timing -Wno-fatal \
+  --top-module tb_mac_fp32_converter \
+  RTL/common/mac_pkg.sv RTL/common/find_leading_one.sv \
+  RTL/MAC/mac_fp32_converter.sv TB/MAC/tb_mac_fp32_converter.sv
+timeout 8s obj_dir/Vtb_mac_fp32_converter
+```
+
+Phase A result:
+
+- FAIL: base plus only `tb_mac_fp32_converter.sv` compiles and prints `Failed` lines across fixed and random int34-to-FP32 cases.
+- Example failure shape: positive and negative large integers produce exponent/mantissa mismatches against the testbench reference.
+
+Phase B result:
+
+- PASS: gold compiles and prints matching `Passed` lines with no `Failed` lines under the same Verilator command.
+- Caveat: the upstream bench does not call `$finish`; the proof uses a short timeout plus transcript parsing. The native `cologic` conversion uses a self-finishing dense oracle instead.
+
+Modal result:
+
+- Command: `modal run scripts/modal_npu_gradients.py`
+- Run URL: https://modal.com/apps/yc-hack27/main/ap-2gW8RggNfnrKjtOsO2CSsS
+- Result: `verified`.
+- Remote environment: Ubuntu 24.04, Verilator 5.020, bounded with `-GNUM_RANDOM_TESTS=64` to avoid wasting runtime on a bench that never calls `$finish`.
+- Modal confirmed base plus test-only patch builds and prints 51 `Failed` lines; gold builds and prints 51 `Passed` lines with zero `Failed` lines.
+
+Verdict: `verified`, `gradient_kind=behavioral_runtime`.
+
+Native conversion:
+
+- Added task `vg_npu_int34_to_fp32`.
+- The task distills the real MAC-path converter bug into a standalone combinational int34-to-FP32 conversion problem with edge cases and random vectors.
+
+Second-pass NPU MAC notes:
+
+- PRs #65, #67, #68, #72, #73, and #74 have useful MAC datapath/preprocessing material, but their benches either only count errors internally, omit `$fatal`/`$error`, or validate broad integration behavior. They are useful source-mining material, not strict verified gradients without a stronger harness.
+- The only newly countable NPU candidate from this pass is PR #64, and it is the one converted into the native RL task.
+
+### Evaluated: `1918fc242bb80045734b882f8b93980b89c4f05a`
+
+- Title: `fix fp32 adder & design find_max`
 - Base SHA: `4203d506485aaacec13aa0d92b98e4d36c146f2d`
 - Gold SHA: `1918fc242bb80045734b882f8b93980b89c4f05a`
 - Test file: `npu_v2/TB/common/tb_find_max_64.sv`
@@ -504,7 +558,7 @@ Notes:
 
 ## Recommendation
 
-Continue sweeping and converting `YashKarthik/tpu`, not Atalla, for immediate verified-gradient work.
+Continue converting clean behavioral accelerator gradients into native tasks. `YashKarthik/tpu` remains the best TPU/systolic source; `thousrm/universal_NPU-CNN_accelerator` is now useful for NPU/MAC datapath tasks. Atalla still needs OSS-compatible harness work before it is worth deeper sweeps.
 
 The best current path is:
 
@@ -520,10 +574,12 @@ Completed so far:
 4. Verified the upstream PR #6 proof locally and on Modal.
 5. Found four additional Yash/tpu commit-level verified gradients; `b85c127` is the best new one because its parent already passes.
 6. Converted `b85c127` into native task `vg_tpu_signed_outputs2x2` around signed matrix values and output-select control.
+7. Verified NPU PR #64 and converted it into `vg_npu_int34_to_fp32`.
 
 Next best work:
 
 1. Keep PR #6 as the headline clean TPU/systolic-array gradient already implemented as `vg_tpu_repeated_matmul2x2`.
 2. Use `vg_tpu_signed_outputs2x2` as the second demo task: it comes from a clean-parent verified gradient and exercises signed/control behavior.
-3. Treat `4c2fad9`, `6cffeff`, and `f4ea139d` as source-mining or training-only candidates unless you explicitly want repair-commit gradients with failing parent controls.
-4. Deprioritize Atalla until someone writes OSS-compatible module harnesses; its best available flows are still Questa-only.
+3. Use `vg_npu_int34_to_fp32` to broaden the environment beyond TPU matmul into NPU MAC datatype conversion.
+4. Treat `4c2fad9`, `6cffeff`, and `f4ea139d` as source-mining or training-only candidates unless you explicitly want repair-commit gradients with failing parent controls.
+5. Deprioritize Atalla until someone writes OSS-compatible module harnesses; its best available flows are still Questa-only.

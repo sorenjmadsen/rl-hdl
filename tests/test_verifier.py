@@ -204,3 +204,16 @@ endmodule
     assert r.info["stage"] == "graded", r.info.get("log", "")[:400]
     assert COMPILE_FLOOR <= r.reward < 1.0
     assert r.info["passed"] < r.info["total"]
+
+
+def test_npu_int34_to_fp32_catches_trivial_constant_converter():
+    task = BY_ID["vg_npu_int34_to_fp32"]
+    constant_one = """
+module npu_int34_to_fp32(input [33:0] int34, output [31:0] fp32);
+  assign fp32 = int34[33] ? 32'hbf800000 : 32'h3f800000;
+endmodule
+"""
+    r = grade(constant_one, task)
+    assert r.info["stage"] == "graded", r.info.get("log", "")[:400]
+    assert COMPILE_FLOOR <= r.reward < 1.0
+    assert r.info["passed"] < r.info["total"]
