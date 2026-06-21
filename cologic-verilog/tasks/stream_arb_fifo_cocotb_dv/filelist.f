@@ -1,0 +1,9 @@
++incdir+vendor/basejump_stl/bsg_misc
+vendor/basejump_stl/bsg_misc/bsg_circular_ptr.sv
+vendor/basejump_stl/bsg_mem/bsg_mem_1r1w_synth.sv
+vendor/basejump_stl/bsg_mem/bsg_mem_1r1w.sv
+vendor/basejump_stl/bsg_dataflow/bsg_fifo_tracker.sv
+vendor/basejump_stl/bsg_dataflow/bsg_two_fifo.sv
+vendor/basejump_stl/bsg_dataflow/bsg_fifo_1r1w_small_unhardened.sv
+vendor/basejump_stl/bsg_dataflow/bsg_fifo_1r1w_small.sv
+rtl/stream_arb_fifo.sv
