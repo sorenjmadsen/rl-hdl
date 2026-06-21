@@ -33,7 +33,7 @@ from cologic.schema import Port
 from cologic.upload import task_from_rtl
 
 # ── Policy model (injected via env; defaults to the Cologic Fireworks deployment) ──
-MODEL = os.environ.get("COLOGIC_TARGET_MODEL", "accounts/sorenmadsen/deployments/tpwhh4w8")
+MODEL = os.environ.get("COLOGIC_TARGET_MODEL", "accounts/fireworks/models/kimi-k2p7-code")
 _client = OpenAI(
     api_key=os.environ.get("FIREWORKS_API_KEY"),
     base_url=os.environ.get("FIREWORKS_BASE_URL", "https://api.fireworks.ai/inference/v1"),
